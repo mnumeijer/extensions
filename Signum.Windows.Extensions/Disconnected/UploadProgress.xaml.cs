@@ -58,8 +58,6 @@ namespace Signum.Windows.Disconnected
 
         DispatcherTimer timer = new DispatcherTimer();
 
-        FileInfo fi = new FileInfo(DisconnectedClient.UploadBackupFile);
-
         void DownloadDatabase_Loaded(object sender, RoutedEventArgs e)
         {
             estimation = Server.Return((IDisconnectedServer ds) => ds.GetUploadEstimation(DisconnectedMachineDN.Current));
@@ -84,6 +82,8 @@ namespace Signum.Windows.Disconnected
 
         private Task<Lite<DisconnectedImportDN>> UploadDatabase()
         {
+            FileInfo fi = new FileInfo(DisconnectedClient.UploadBackupFile);
+
             pbUploading.Minimum = 0;
             pbUploading.Maximum = fi.Length;
 
