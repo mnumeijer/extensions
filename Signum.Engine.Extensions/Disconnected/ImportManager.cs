@@ -270,7 +270,7 @@ namespace Signum.Engine.Disconnected
         {
             DisconnectedTools.EnableForeignKeys(table);
 
-            foreach (var rt in table.RelationalTables())
+            foreach (var rt in table.TablesMList())
                 DisconnectedTools.EnableForeignKeys(rt);
         }
 
@@ -278,7 +278,7 @@ namespace Signum.Engine.Disconnected
         {
             DisconnectedTools.DisableForeignKeys(table);
 
-            foreach (var rt in table.RelationalTables())
+            foreach (var rt in table.TablesMList())
                 DisconnectedTools.DisableForeignKeys(rt);
         }
 
@@ -288,10 +288,6 @@ namespace Signum.Engine.Disconnected
 
             string fileName = DatabaseFileName(machine);
             string logFileName = DatabaseLogFileName(machine);
-
-            //2013-08-06
-            //DisconnectedTools.CreateDatabaseDirectory(fileName);
-            //DisconnectedTools.CreateDatabaseDirectory(logFileName);
 
             DisconnectedTools.RestoreDatabase(DatabaseName(machine), backupFileName, fileName, logFileName);
         }
@@ -386,7 +382,7 @@ namespace Signum.Engine.Disconnected
 
                         int result = Executor.ExecuteNonQuery(sql);
 
-                        foreach (var rt in table.RelationalTables())
+                        foreach (var rt in table.TablesMList())
                         {
                             SqlPreCommandSimple rsql = InsertRelationalTableScript(table, newDatabaseName, interval, rt);
 
@@ -399,7 +395,7 @@ namespace Signum.Engine.Disconnected
             }
         }
 
-        protected virtual SqlPreCommandSimple InsertRelationalTableScript(Table table, DatabaseName newDatabaseName, Interval<int>? interval, RelationalTable rt)
+        protected virtual SqlPreCommandSimple InsertRelationalTableScript(Table table, DatabaseName newDatabaseName, Interval<int>? interval, TableMList rt)
         {
             ParameterBuilder pb = Connector.Current.ParameterBuilder;
             var columns = rt.Columns.Values.Where(c => !c.Identity);
@@ -410,11 +406,11 @@ SELECT {2}
 JOIN {4} [table] on [relationalTable].{5} = [table].Id
 WHERE @min <= [table].Id AND [table].Id < @max".Formato(
 rt.Name,
-columns.ToString(c => c.Name.SqlScape(), ", "),
-columns.ToString(c => "[relationalTable]." + c.Name.SqlScape(), ", "),
+columns.ToString(c => c.Name.SqlEscape(), ", "),
+columns.ToString(c => "[relationalTable]." + c.Name.SqlEscape(), ", "),
 rt.Name.OnDatabase(newDatabaseName),
 table.Name.OnDatabase(newDatabaseName),
-rt.BackReference.Name.SqlScape());
+rt.BackReference.Name.SqlEscape());
 
             var sql = new SqlPreCommandSimple(command, new List<DbParameter>()
             {
@@ -432,8 +428,8 @@ SELECT {2}
                     from {3} as [table]
 WHERE @min <= [table].Id AND [table].Id < @max".Formato(
 table.Name,
-table.Columns.Keys.ToString(a => a.SqlScape(), ", "),
-table.Columns.Keys.ToString(a => "[table]." + a.SqlScape(), ", "),
+table.Columns.Keys.ToString(a => a.SqlEscape(), ", "),
+table.Columns.Keys.ToString(a => "[table]." + a.SqlEscape(), ", "),
 table.Name.OnDatabase(newDatabaseName));
 
             var sql = new SqlPreCommandSimple(command, new List<DbParameter>()
@@ -481,7 +477,7 @@ table.Name.OnDatabase(newDatabaseName));
 
                 int result = Executor.ExecuteNonQuery(command);
 
-                foreach (var rt in table.RelationalTables())
+                foreach (var rt in table.TablesMList())
                 {
                     SqlPreCommandSimple delete = DeleteUpdatedRelationalTableScript(machine, table, rt, newDatabaseName);
 
@@ -496,7 +492,7 @@ table.Name.OnDatabase(newDatabaseName));
             }
         }
 
-        protected virtual SqlPreCommandSimple InsertUpdatedRelationalTableScript(DisconnectedMachineDN machine, Table table, RelationalTable rt, DatabaseName newDatabaseName)
+        protected virtual SqlPreCommandSimple InsertUpdatedRelationalTableScript(DisconnectedMachineDN machine, Table table, TableMList rt, DatabaseName newDatabaseName)
         {
             ParameterBuilder pb = Connector.Current.ParameterBuilder;
             var columns = rt.Columns.Values.Where(c => !c.Identity);
@@ -506,15 +502,15 @@ SELECT {2}
 FROM {3} as [relationalTable]
 INNER JOIN {4} as [table] ON [relationalTable].{5} = [table].id".Formato(
             rt.Name,
-            columns.ToString(c => c.Name.SqlScape(), ", "),
-            columns.ToString(c => "[relationalTable]." + c.Name.SqlScape(), ", "),
+            columns.ToString(c => c.Name.SqlEscape(), ", "),
+            columns.ToString(c => "[relationalTable]." + c.Name.SqlEscape(), ", "),
             rt.Name.OnDatabase(newDatabaseName),
             table.Name.OnDatabase(newDatabaseName),
-            rt.BackReference.Name.SqlScape()) + GetUpdateWhere(table), new List<DbParameter> { pb.CreateParameter("@machineId", machine.Id, typeof(int)) });
+            rt.BackReference.Name.SqlEscape()) + GetUpdateWhere(table), new List<DbParameter> { pb.CreateParameter("@machineId", machine.Id, typeof(int)) });
             return insert;
         }
 
-        protected virtual SqlPreCommandSimple DeleteUpdatedRelationalTableScript(DisconnectedMachineDN machine, Table table, RelationalTable rt, DatabaseName newDatabaseName)
+        protected virtual SqlPreCommandSimple DeleteUpdatedRelationalTableScript(DisconnectedMachineDN machine, Table table, TableMList rt, DatabaseName newDatabaseName)
         {
             ParameterBuilder pb = Connector.Current.ParameterBuilder;
 
@@ -523,7 +519,7 @@ FROM {0}
 INNER JOIN {1} as [table] ON {0}.{2} = [table].id".Formato(
                 rt.Name,
                 table.Name.OnDatabase(newDatabaseName),
-                rt.BackReference.Name.SqlScape()) + GetUpdateWhere(table), new List<DbParameter> { pb.CreateParameter("@machineId", machine.Id, typeof(int)) });
+                rt.BackReference.Name.SqlEscape()) + GetUpdateWhere(table), new List<DbParameter> { pb.CreateParameter("@machineId", machine.Id, typeof(int)) });
             return delete;
         }
 
@@ -538,7 +534,7 @@ INNER JOIN {1} as [table] ON {0}.id = [table].id
 ".Formato(
  table.Name,
  table.Name.OnDatabase(newDatabaseName),
- table.Columns.Values.Where(c => !c.PrimaryKey).ToString(c => "   {0}.{1} = [table].{1}".Formato(table.Name, c.Name.SqlScape()), ",\r\n")) + GetUpdateWhere(table),
+ table.Columns.Values.Where(c => !c.PrimaryKey).ToString(c => "   {0}.{1} = [table].{1}".Formato(table.Name, c.Name.SqlEscape()), ",\r\n")) + GetUpdateWhere(table),
  new List<DbParameter> { pb.CreateParameter("@machineId", machine.Id, typeof(int)) });
             return command;
         }
@@ -548,9 +544,9 @@ INNER JOIN {1} as [table] ON {0}.id = [table].id
             var s = Schema.Current;
 
             var where = "\r\nWHERE [table].{0} = @machineId AND [table].{1} != [table].{2}".Formato(
-                ((FieldReference)s.Field((T t) => t.Mixin<DisconnectedMixin>().DisconnectedMachine)).Name.SqlScape(),
-                ((FieldValue)s.Field((T t) => t.Ticks)).Name.SqlScape(),
-                ((FieldValue)s.Field((T t) => t.Mixin<DisconnectedMixin>().LastOnlineTicks)).Name.SqlScape());
+                ((FieldReference)s.Field((T t) => t.Mixin<DisconnectedMixin>().DisconnectedMachine)).Name.SqlEscape(),
+                ((FieldValue)s.Field((T t) => t.Ticks)).Name.SqlEscape(),
+                ((FieldValue)s.Field((T t) => t.Mixin<DisconnectedMixin>().LastOnlineTicks)).Name.SqlEscape());
             return where;
         }
     }
