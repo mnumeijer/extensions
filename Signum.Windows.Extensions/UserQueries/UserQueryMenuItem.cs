@@ -121,7 +121,7 @@ namespace Signum.Windows.UserQueries
                 if (MessageBox.Show(UserQueryMessage.AreYouSureToRemove0.NiceToString().Formato(current), UserQueryMessage.RemoveUserQuery.NiceToString(),
                     MessageBoxButton.YesNo, MessageBoxImage.Exclamation, MessageBoxResult.No) == MessageBoxResult.Yes)
                 {
-                    current.ToLite().Delete(UserQueryOperation.Delete);
+                    current.ToLite().DeleteLite(UserQueryOperation.Delete);
 
                     initialize();
 
@@ -138,7 +138,7 @@ namespace Signum.Windows.UserQueries
                     MenuItem b = (MenuItem)e.OriginalSource;
                     Lite<UserQueryDN> userQuery = (Lite<UserQueryDN>)b.Tag;
 
-                    var uq = userQuery.Retrieve();
+                    var uq = Server.Return((IUserQueryServer s) => s.RetrieveUserQuery(userQuery));
 
                     UserQueryClient.ToSearchControl(uq, sc);
 
@@ -161,7 +161,7 @@ namespace Signum.Windows.UserQueries
 
                 if (userQueries.Count > 0)
                 {
-                    foreach (Lite<UserQueryDN> report in userQueries)
+                    foreach (Lite<UserQueryDN> report in userQueries.OrderBy(a=>a.ToString()))
                     {
                         MenuItem mi = new MenuItem()
                         {
@@ -174,7 +174,7 @@ namespace Signum.Windows.UserQueries
                     }
                 }
 
-                if (Navigator.IsNavigable(typeof(UserQueryDN), isSearchEntity: true))
+                if (Navigator.IsNavigable(typeof(UserQueryDN), isSearch: true))
                 {
                     miResult.Items.Add(new Separator());
 

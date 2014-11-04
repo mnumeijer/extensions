@@ -15,7 +15,6 @@ using System.Web.Routing;
 using System.Web.Mvc;
 using Signum.Entities.Basics;
 using Signum.Engine.Basics;
-using Signum.Web.Reports;
 using Signum.Entities.UserQueries;
 using Signum.Engine.Chart;
 using Signum.Engine.Authorization;
@@ -26,6 +25,8 @@ using System.Text;
 using Signum.Entities.Files;
 using Signum.Web.UserQueries;
 using Newtonsoft.Json.Linq;
+using Signum.Web.UserAssets;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Web.Chart
 {
@@ -33,8 +34,8 @@ namespace Signum.Web.Chart
     {
         public static string ViewPrefix = "~/Chart/Views/{0}.cshtml";
 
-        public static string Module = "Extensions/Signum.Web.Extensions/Chart/Scripts/Chart";
-        public static string ModuleScript = "Extensions/Signum.Web.Extensions/Chart/Scripts/ChartScript";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Chart/Scripts/Chart");
+        public static JsModule ModuleScript = new JsModule("Extensions/Signum.Web.Extensions/Chart/Scripts/ChartScript");
 
         public static string ChartRequestView = ViewPrefix.Formato("ChartRequestView");
         public static string ChartBuilderView = ViewPrefix.Formato("ChartBuilder");
@@ -73,17 +74,17 @@ namespace Signum.Web.Chart
         public static EntityMapping<ChartColumnDN> MappingChartColumn = new EntityMapping<ChartColumnDN>(true)
             .SetProperty(ct => ct.Token, ctx =>
             {
-                var tokenName = UserQueriesHelper.GetTokenString(ctx);
+                var tokenName = UserAssetsHelper.GetTokenString(ctx);
 
                 if (string.IsNullOrEmpty(tokenName))
                     return null;
 
                 var qd = DynamicQueryManager.Current.QueryDescription(
-                    Navigator.ResolveQueryName(ctx.ControllerContext.HttpContext.Request.Params["webQueryName"]));
+                    Finder.ResolveQueryName(ctx.Controller.ControllerContext.HttpContext.Request.Params["webQueryName"]));
 
                 var chartToken = (ChartColumnDN)ctx.Parent.UntypedValue;
 
-                var token = QueryUtils.Parse(tokenName, qd, canAggregate: true /* chartToken.ParentChart.GroupResults*/);
+                var token = QueryUtils.Parse(tokenName, qd, SubTokensOptions.CanElement | SubTokensOptions.CanAggregate /* chartToken.ParentChart.GroupResults*/);
 
                 if (token is AggregateToken && !chartToken.ParentChart.GroupResults)
                     token = token.Parent;
@@ -129,7 +130,6 @@ namespace Signum.Web.Chart
                         itemCtx.Value = ElementMapping(itemCtx);
 
                         ctx.AddChild(itemCtx);
-                        list[i] = itemCtx.Value;
                     }
                     i++;
                 }
@@ -141,22 +141,22 @@ namespace Signum.Web.Chart
         static List<Entities.DynamicQuery.Filter> ExtractChartFilters(MappingContext<List<Entities.DynamicQuery.Filter>> ctx)
         {
             var qd = DynamicQueryManager.Current.QueryDescription(
-                Navigator.ResolveQueryName(ctx.ControllerContext.HttpContext.Request.Params["webQueryName"]));
+                Finder.ResolveQueryName(ctx.Controller.ControllerContext.HttpContext.Request.Params["webQueryName"]));
 
             ChartRequest chartRequest = (ChartRequest)ctx.Parent.UntypedValue;
 
-            return FindOptionsModelBinder.ExtractFilterOptions(ctx.ControllerContext.HttpContext, qd, canAggregate: chartRequest.GroupResults)
+            return FindOptionsModelBinder.ExtractFilterOptions(ctx.Controller.ControllerContext.HttpContext, qd, canAggregate: chartRequest.GroupResults)
                 .Select(fo => fo.ToFilter()).ToList();
         }
 
         static List<Order> ExtractChartOrders(MappingContext<List<Order>> ctx)
         {
             var qd = DynamicQueryManager.Current.QueryDescription(
-                Navigator.ResolveQueryName(ctx.ControllerContext.HttpContext.Request.Params["webQueryName"]));
+                Finder.ResolveQueryName(ctx.Controller.ControllerContext.HttpContext.Request.Params["webQueryName"]));
 
             ChartRequest chartRequest = (ChartRequest)ctx.Parent.UntypedValue;
 
-            return FindOptionsModelBinder.ExtractOrderOptions(ctx.ControllerContext.HttpContext, qd, canAggregate: true/*chartRequest.GroupResults*/)
+            return FindOptionsModelBinder.ExtractOrderOptions(ctx.Controller.ControllerContext.HttpContext, qd, canAggregate: true/*chartRequest.GroupResults*/)
                     .Select(fo => fo.ToOrder()).ToList();
         }
 
@@ -175,12 +175,11 @@ namespace Signum.Web.Chart
 
             string chartNewText = ChartMessage.Chart.NiceToString();
 
-            return new ToolBarButton
+            return new ToolBarButton(ctx.Prefix, "qbChartNew")
             {
-                Id = TypeContextUtilities.Compose(ctx.Prefix, "qbChartNew"),
                 Title = chartNewText,
                 Text = chartNewText,
-                OnClick = new JsFunction(Module, "openChart", ctx.Prefix,  ctx.Url.Action("Index", "Chart"))
+                OnClick = Module["openChart"](ctx.Prefix,  ctx.Url.Action("Index", "Chart"))
             };
         }
 
@@ -197,21 +196,29 @@ namespace Signum.Web.Chart
             return css;
         }
 
-        public static JObject ToJS(this ChartRequest request)
+        public static JObject ToChartRequest(this ChartRequest request, UrlHelper url, string prefix, ChartRequestMode mode)
         {
             return new JObject
             {
-            { "webQueryName", Navigator.ResolveWebQueryName(request.QueryName) },
-            { "orders", new JArray(request.Orders.Select(o=>new JObject { {"orderType" ,(int)o.OrderType} , {"columnName" ,o.Token.FullKey()}}))},
+                {"prefix", prefix },
+                { "webQueryName", Finder.ResolveWebQueryName(request.QueryName) },
+                { "orders", new JArray(request.Orders.Select(o=>new JObject { {"orderType" ,(int)o.OrderType} , {"columnName" ,o.Token.FullKey()}}))},
+                { "updateChartBuilderUrl", url.Action<ChartController>(cc => cc.UpdateChartBuilder(prefix)) },
+                { "fullScreenUrl", url.Action<ChartController>(cc => cc.FullScreen(prefix))},
+                { "addFilterUrl", url.Action("AddFilter", "Chart") },
+                { "drawUrl", url.Action<ChartController>(cc => cc.Draw(prefix)) },
+                { "openUrl", url.Action<ChartController>(cc => cc.OpenSubgroup(prefix)) },
+                { "mode", (int)mode }
             };
         }
 
-        public static JObject ToJS(this UserChartDN userChart)
+        public static JObject ToChartBuilder(this UserChartDN userChart, UrlHelper url, string prefix)
         {
             return new JObject
             {
-            { "webQueryName", Navigator.ResolveWebQueryName(userChart.QueryName) },
-            { "orders", new JArray(userChart.Orders.Select(o=>new JObject { {"orderType" ,(int)o.OrderType} , {"columnName" ,o.Token.Token.FullKey()}}))},
+                {"prefix", prefix },
+                { "webQueryName", Finder.ResolveWebQueryName(userChart.QueryName) },
+                { "updateChartBuilderUrl", url.Action<ChartController>(cc => cc.UpdateChartBuilder(prefix)) }
             };
         }
 
@@ -257,15 +264,21 @@ namespace Signum.Web.Chart
             vl.ValueHtmlProps["class"] = "sf-chart-redraw-onchange";
         }
 
-        public static QueryTokenBuilderSettings GetQueryTokenBuilderSettings(QueryDescription qd, bool groupResults, bool isKey)
+        public static QueryTokenBuilderSettings GetQueryTokenBuilderSettings(QueryDescription qd, SubTokensOptions options)
         {
-            return new QueryTokenBuilderSettings
+            return new QueryTokenBuilderSettings(qd, options)
             {
-                CanAggregate = groupResults && !isKey,
-                QueryDescription = qd,
                 Decorators = new Action<QueryToken, HtmlTag>(SearchControlHelper.CanFilterDecorator),
-                ControllerUrl = RouteHelper.New().Action("NewSubTokensCombo", "Chart")
+                ControllerUrl = RouteHelper.New().Action("NewSubTokensCombo", "Chart"),
             }; 
         }
     }
+
+    public enum ChartRequestMode
+    {
+        complete,
+        chart,
+        data
+    }
+
 }

@@ -15,6 +15,8 @@ namespace Signum.Windows.Alerts
         {
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
+                if (types == null)
+                    throw new ArgumentNullException("types");
 
                 Navigator.AddSettings(new List<EntitySettings>
                 {
@@ -31,14 +33,14 @@ namespace Signum.Windows.Alerts
 
                 OperationClient.AddSettings(new List<OperationSettings> 
                 {
-                    new EntityOperationSettings(AlertOperation.CreateAlertFromEntity){ IsVisible = a => false },
-                    new EntityOperationSettings(AlertOperation.SaveNew){ IsVisible = a => a.Entity.IsNew },
-                    new EntityOperationSettings(AlertOperation.Save){ IsVisible = a => !a.Entity.IsNew }
+                    new EntityOperationSettings<IdentifiableEntity>(AlertOperation.CreateAlertFromEntity){ IsVisible = a => false },
+                    new EntityOperationSettings<AlertDN>(AlertOperation.SaveNew){ IsVisible = a => a.Entity.IsNew },
+                    new EntityOperationSettings<AlertDN>(AlertOperation.Save){ IsVisible = a => !a.Entity.IsNew }
                 });
 
                 WidgetPanel.GetWidgets += (obj, mainControl) =>
-                 (obj is IdentifiableEntity && types.Contains(obj.GetType()) && !((IdentifiableEntity)obj).IsNew) &&
-                 Navigator.IsFindable(typeof(AlertDN)) ? new AlertsWidget() : null;
+                    (obj is IdentifiableEntity && types.Contains(obj.GetType()) && !((IdentifiableEntity)obj).IsNew) &&
+                    Finder.IsFindable(typeof(AlertDN)) ? new AlertsWidget() : null;
             }
         }
     }

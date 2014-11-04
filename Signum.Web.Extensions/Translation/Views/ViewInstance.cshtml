@@ -22,8 +22,11 @@
     var all = string.IsNullOrEmpty(filter);
 
     Func<LocalizedInstanceKey, bool> filtered = li => all ||
-        master.GetOrThrow(li).Contains(filter) ||
-        cultures.Any(ci => Model.TryGetC(ci).TryGetC(li).Try(t => t.TranslatedText).DefaultText("").Contains(filter));
+        li.RowId.ToString() == filter ||
+        li.Instance.Id.ToString() == filter || 
+        li.Route.PropertyString().Contains(filter, StringComparison.InvariantCultureIgnoreCase) ||
+        master.GetOrThrow(li).Contains(filter, StringComparison.InvariantCultureIgnoreCase) ||
+        cultures.Any(ci => Model.TryGetC(ci).TryGetC(li).Try(t => t.TranslatedText).DefaultText("").Contains(filter, StringComparison.InvariantCultureIgnoreCase));
 }
 @Html.ScriptCss("~/Translation/Content/Translation.css")
 
@@ -66,23 +69,31 @@ else
             </thead>
 
             foreach (LocalizedInstanceKey key in instance.OrderBy(a => a.Route.ToString()))
-            {     
+            {   
+                  var propertyString = key.Route.PropertyString().Replace("/", "[" + key.RowId + "].");
             <tr>
                 <th class="leftCell">@TranslationMessage.Property.NiceToString()
                 </th>
-                <th>@key.Route.PropertyString()</th>
+                <th>@propertyString</th>
             </tr>
             
                 foreach (var ci in cultures)
                 {
-                    var formName = ci.Name + "#" + key.Instance.Key() + "#" + key.Route.PropertyString();
+                    var formName = ci.Name + "#" + key.Instance.Key() + "#" + propertyString;
 
-                    if (ci.Name == TranslatedInstanceLogic.DefaultCulture)
+                    if (ci.Name == TranslatedInstanceLogic.DefaultCulture.Name)
                     {
             <tr>
-                <td class="leftCell">@TranslatedInstanceLogic.DefaultCulture</td>
+                <td class="leftCell"><em>@TranslatedInstanceLogic.DefaultCulture</em></td>
                 <td class="monospaceCell">
-                    <em>@master[key]</em>
+                    @if (TranslatedInstanceLogic.RouteType(key.Route).Value == TraducibleRouteType.Html)
+                    {
+                        <pre>@master[key]</pre>
+                    }
+                    else
+                    {
+                        @master[key]
+                    }
                     @Html.TextArea(formName, master[key], new { style = "display:none" })
                 </td>
             </tr>
@@ -91,14 +102,30 @@ else
                     {
                         TranslatedInstanceDN trans = Model.TryGetC(ci).TryGetC(key);
 
+                        if (trans != null && editCulture(ci))
+                            {
+            <tr>
+                <td class="leftCell">@ci.Name Diff</td>
+                <td class="monospaceCell">
+                    @Signum.Web.Translation.TranslationClient.Diff(trans.OriginalText, trans.TranslatedText)
+                </td>
+            </tr>
+                                
+                            }
+                        
+                        
                         if (trans != null || editCulture(ci))
-                        {
+                        {   
             <tr>
                 <td class="leftCell">@ci.Name</td>
                 <td class="monospaceCell">
                     @if (editCulture(ci))
                     {
                         @Html.TextArea(formName, trans.Try(t => t.TranslatedText), new { style = "width:90%;height:16px" })
+                    }
+                    else if (TranslatedInstanceLogic.RouteType(key.Route).Value == TraducibleRouteType.Html)
+                    {
+                        <pre>@trans.TranslatedText</pre>
                     }
                     else
                     {
@@ -116,3 +143,10 @@ else
     <input type="submit" value="@TranslationMessage.Save.NiceToString()" />
     }
 }
+
+
+<script>
+    $(function () {
+        @(Signum.Web.Translation.TranslationClient.Module["fixTextAreas"]())
+    });
+</script>

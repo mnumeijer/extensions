@@ -14,7 +14,6 @@ using Signum.Utilities.ExpressionTrees;
 using Signum.Entities;
 using Signum.Engine.Maps;
 using Signum.Engine.Basics;
-using Signum.Entities.Reports;
 using Signum.Entities.Authorization;
 using Signum.Engine.Authorization;
 using Signum.Entities.Reflection;
@@ -75,11 +74,6 @@ namespace Signum.Engine.Chart
                     Orders = request.Orders
                 }); 
             }
-        }
-
-        public static List<Lite<UserChartDN>> Autocomplete(string subString, int limit)
-        {
-            return Database.Query<UserChartDN>().Where(uq => uq.EntityType == null).Autocomplete(subString, limit);
         }
     }
 }

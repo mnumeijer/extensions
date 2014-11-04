@@ -9,17 +9,17 @@ using Signum.Utilities;
 using Signum.Entities.Reflection;
 using Signum.Entities;
 using Signum.Entities.DynamicQuery;
-using Signum.Entities.UserQueries;
 using System.Collections.Specialized;
 using Signum.Engine;
 using Signum.Entities.Authorization;
 using Signum.Engine.Basics;
 using System.Web.Script.Serialization;
-using Signum.Engine.Reports;
 using Signum.Web.Controllers;
 using Signum.Engine.Chart;
 using Signum.Entities.Basics;
 using Signum.Engine.Authorization;
+using Signum.Engine.Excel;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Web.Chart
 {
@@ -28,14 +28,14 @@ namespace Signum.Web.Chart
         #region chart
         public ActionResult Index(FindOptions findOptions)
         {
-            ChartPermission.ViewCharting.Authorize(); 
+            ChartPermission.ViewCharting.Authorize();
 
-            if (!Navigator.IsFindable(findOptions.QueryName))
+            if (!Finder.IsFindable(findOptions.QueryName))
                 throw new UnauthorizedAccessException(ChartMessage.Chart_Query0IsNotAllowed.NiceToString().Formato(findOptions.QueryName));
 
             QueryDescription queryDescription = DynamicQueryManager.Current.QueryDescription(findOptions.QueryName);
 
-            Navigator.SetTokens(findOptions.FilterOptions, queryDescription, false);
+            FilterOption.SetFilterTokens(findOptions.FilterOptions, queryDescription, false);
 
             var request = new ChartRequest(findOptions.QueryName)
             {
@@ -43,33 +43,19 @@ namespace Signum.Web.Chart
                 Filters = findOptions.FilterOptions.Select(fo => fo.ToFilter()).ToList()
             };
 
-            return OpenChartRequest(request,
-                findOptions.FilterOptions,
-                findOptions.Navigate && IsNavigableEntity(request.QueryName),
-                null);
+            return OpenChartRequest(request, null);
         }
 
         public ViewResult FullScreen(string prefix)
         {
-            var request = this.ExtractChartRequestCtx(null).Value;
+            var ctx = this.ExtractChartRequestCtx(null);
 
-            return OpenChartRequest(request,
-                request.Filters.Select(f => new FilterOption { Token = f.Token, Operation = f.Operation, Value = f.Value }).ToList(),
-                IsNavigableEntity(request.QueryName),
-                null);
+            if (ctx.HasErrors())
+                throw new InvalidOperationException(ctx.Errors.SelectMany(a => a.Value).ToString("\r\n"));
+
+            return OpenChartRequest(ctx.Value, null);
         }
 
-        public bool IsNavigableEntity(object queryName)
-        {
-            var queryDescription = DynamicQueryManager.Current.QueryDescription(queryName);
-
-            var entityColumn = queryDescription.Columns.SingleEx(a => a.IsEntity);
-
-            Type entitiesType = Lite.Extract(entityColumn.Type);
-            Implementations implementations = entityColumn.Implementations.Value;
-
-            return implementations.IsByAll || implementations.Types.Any(t => Navigator.IsNavigable(t, null, isSearchEntity: true));
-        }
 
         [HttpPost]
         public PartialViewResult UpdateChartBuilder(string prefix)
@@ -84,14 +70,21 @@ namespace Signum.Web.Chart
         }
 
         [HttpPost]
-        public ContentResult NewSubTokensCombo(string webQueryName, string tokenName)
+        public ContentResult NewSubTokensCombo(string webQueryName, string tokenName, int options)
         {
             ChartRequest request = this.ExtractChartRequestCtx(null).Value;
+
+            SubTokensOptions ops = (SubTokensOptions)options;
+            if (request.GroupResults)
+                ops = ops | SubTokensOptions.CanAggregate;
+            else
+                ops = ops & ~SubTokensOptions.CanAggregate;
+        
             QueryDescription qd = DynamicQueryManager.Current.QueryDescription(request.QueryName);
-            QueryToken token = QueryUtils.Parse(tokenName, qd, request.GroupResults);
+            QueryToken token = QueryUtils.Parse(tokenName, qd, ops);
 
             var combo = FinderController.CreateHtmlHelper(this).QueryTokenBuilderOptions(token, new Context(null, this.Prefix()),
-                ChartClient.GetQueryTokenBuilderSettings(qd, request.GroupResults, isKey : false));
+                ChartClient.GetQueryTokenBuilderSettings(qd, ops));
 
             return Content(combo.ToHtmlString());
         }
@@ -103,12 +96,12 @@ namespace Signum.Web.Chart
 
             QueryDescription qd = DynamicQueryManager.Current.QueryDescription(request.QueryName);
 
-            object queryName = Navigator.ResolveQueryName(webQueryName);
+            object queryName = Finder.ResolveQueryName(webQueryName);
 
             FilterOption fo = new FilterOption(tokenName, null);
             if (fo.Token == null)
             {
-                fo.Token = QueryUtils.Parse(tokenName, qd, canAggregate: request.GroupResults);
+                fo.Token = QueryUtils.Parse(tokenName, qd, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | (request.GroupResults ? SubTokensOptions.CanAggregate : 0));
             }
             fo.Operation = QueryUtils.GetFilterOperations(QueryUtils.GetFilterType(fo.Token.Type)).FirstEx();
 
@@ -122,13 +115,15 @@ namespace Signum.Web.Chart
             var requestCtx = this.ExtractChartRequestCtx(null).ValidateGlobal();
 
             if (requestCtx.HasErrors())
-                return requestCtx.JsonErrors();
+                return requestCtx.ToJsonModelState();
 
             var request = requestCtx.Value;
 
             var resultTable = ChartLogic.ExecuteChart(request);
 
-            var querySettings = Navigator.QuerySettings(request.QueryName);
+            var querySettings = Finder.QuerySettings(request.QueryName);
+
+            ViewData["mode"] = this.ParseValue<ChartRequestMode>("mode");
 
             ViewData[ViewDataKeys.Results] = resultTable;
 
@@ -136,6 +131,15 @@ namespace Signum.Web.Chart
             ViewData[ViewDataKeys.Formatters] = resultTable.Columns.Select((c, i) => new { c, i }).ToDictionary(c => c.i, c => querySettings.GetFormatter(c.c.Column));
 
             return PartialView(ChartClient.ChartResultsView, new TypeContext<ChartRequest>(request, this.Prefix()));
+        }
+
+        bool IsNavigableEntity(object queryName)
+        {
+            var queryDescription = DynamicQueryManager.Current.QueryDescription(queryName);
+
+            Implementations implementations = queryDescription.Columns.SingleEx(a => a.IsEntity).Implementations.Value;
+
+            return implementations.IsByAll || implementations.Types.Any(t => Navigator.IsNavigable(t, null, isSearch: true));
         }
 
         public ActionResult OpenSubgroup(string prefix)
@@ -175,7 +179,7 @@ namespace Signum.Web.Chart
                     throw new Exception("If the chart is not grouping, entity must be provided");
                  
                 var queryDescription = DynamicQueryManager.Current.QueryDescription(chartRequest.QueryName);
-                var querySettings = Navigator.QuerySettings(chartRequest.QueryName);
+                var querySettings = Finder.QuerySettings(chartRequest.QueryName);
 
                 var entityColumn = queryDescription.Columns.SingleEx(a => a.IsEntity);
                 Type entitiesType = Lite.Extract(entityColumn.Type);
@@ -211,7 +215,7 @@ namespace Signum.Web.Chart
         {
             var requestCtx = this.ExtractChartRequestCtx(null).ValidateGlobal();
 
-            return requestCtx.JsonErrors();
+            return requestCtx.ToJsonModelState();
         }
 
         [HttpPost]
@@ -219,41 +223,44 @@ namespace Signum.Web.Chart
         {
             var request = ExtractChartRequestCtx(null).Value;
 
-            if (!Navigator.IsFindable(request.QueryName))
+            if (!Finder.IsFindable(request.QueryName))
                 throw new UnauthorizedAccessException(ChartMessage.Chart_Query0IsNotAllowed.NiceToString().Formato(request.QueryName));
 
             var resultTable = ChartLogic.ExecuteChart(request);
 
             byte[] binaryFile = PlainExcelGenerator.WritePlainExcel(resultTable);
 
-            return File(binaryFile, MimeType.FromExtension(".xlsx"), Navigator.ResolveWebQueryName(request.QueryName) + ".xlsx");
+            return File(binaryFile, MimeType.FromExtension(".xlsx"), Finder.ResolveWebQueryName(request.QueryName) + ".xlsx");
         }
         #endregion
 
         public MappingContext<ChartRequest> ExtractChartRequestCtx(int? lastTokenChanged)
         {
-            var ctx = new ChartRequest(Navigator.ResolveQueryName(Request.Params["webQueryName"]))
-                .ApplyChanges(ControllerContext, ChartClient.MappingChartRequest, inputs: Request.Params.ToSortedList(this.Prefix()));
+            var ctx = new ChartRequest(Finder.ResolveQueryName(Request.Params["webQueryName"]))
+                .ApplyChanges(this, ChartClient.MappingChartRequest, inputs: Request.Params.ToSortedList(this.Prefix()));
 
             ctx.Value.CleanOrderColumns();
 
             ChartRequest chart = ctx.Value;
             if (lastTokenChanged != null)
-                chart.Columns[lastTokenChanged.Value].TokenChanged();
+            {
+                if (lastTokenChanged == -1)
+                    chart.ChartScript.SyncronizeColumns(chart, changeParameters: true); 
+                else
+                    chart.Columns[lastTokenChanged.Value].TokenChanged();
+            }
 
             return ctx;
         }
 
-        ViewResult OpenChartRequest(ChartRequest request, List<FilterOption> filterOptions, bool navigate, Lite<UserChartDN> currentUserChart)
+        ViewResult OpenChartRequest(ChartRequest request, Lite<UserChartDN> currentUserChart)
         {
-            ViewData[ViewDataKeys.PartialViewName] = ChartClient.ChartRequestView;
-            ViewData[ViewDataKeys.Title] = Navigator.Manager.SearchTitle(request.QueryName);
+            ViewData[ViewDataKeys.Title] = QueryUtils.GetNiceName(request.QueryName);
             ViewData[ViewDataKeys.QueryDescription] = DynamicQueryManager.Current.QueryDescription(request.QueryName); ;
-            ViewData[ViewDataKeys.FilterOptions] = filterOptions;
-            ViewData[ViewDataKeys.Navigate] = navigate;
+            ViewData[ViewDataKeys.FilterOptions] =  request.Filters.Select(f => new FilterOption { Token = f.Token, Operation = f.Operation, Value = f.Value }).ToList();
             ViewData["UserChart"] = currentUserChart;
-            
-            return View(Navigator.Manager.SearchPageView, new TypeContext<ChartRequest>(request, ""));
+
+            return View(ChartClient.ChartRequestView, new TypeContext<ChartRequest>(request, ""));
         }
 
         #region user chart
@@ -261,7 +268,7 @@ namespace Signum.Web.Chart
         {
             var request = ExtractChartRequestCtx(null).Value;
 
-            if (!Navigator.IsFindable(request.QueryName))
+            if (!Finder.IsFindable(request.QueryName))
                 throw new UnauthorizedAccessException(ChartMessage.Chart_Query0IsNotAllowed.NiceToString().Formato(request.QueryName));
 
             var userChart = request.ToUserChart();
@@ -275,17 +282,12 @@ namespace Signum.Web.Chart
 
         public ActionResult ViewUserChart(Lite<UserChartDN> lite, Lite<IdentifiableEntity> currentEntity)
         {
-            UserChartDN uc = Database.Retrieve<UserChartDN>(lite);
+            UserChartDN uc = UserChartLogic.RetrieveUserChart(lite);
 
-            if (uc.EntityType != null)
-                CurrentEntityConverter.SetFilterValues(uc.Filters, currentEntity.Retrieve());
+            ChartRequest request = (uc.EntityType == null ? null : CurrentEntityConverter.SetCurrentEntity(currentEntity.Retrieve()))
+                .Using(_ => uc.ToRequest());
 
-            ChartRequest request = uc.ToRequest();
-
-            return OpenChartRequest(request,
-                request.Filters.Select(f => new FilterOption { Token = f.Token, Operation = f.Operation, Value = f.Value }).ToList(),
-                IsNavigableEntity(request.QueryName),
-                uc.ToLite());
+            return OpenChartRequest(request, uc.ToLite());
         }
         #endregion
     }

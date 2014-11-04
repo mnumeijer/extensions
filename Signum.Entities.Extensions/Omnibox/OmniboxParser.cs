@@ -11,6 +11,7 @@ using Signum.Entities.UserQueries;
 using System.Collections.Concurrent;
 using System.Globalization;
 using Signum.Entities.Authorization;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Entities.Omnibox
 {
@@ -169,7 +170,7 @@ namespace Signum.Entities.Omnibox
         internal Dictionary<string, Type> Types()
         {
             return types.GetOrAdd(CultureInfo.CurrentUICulture, ci =>
-               GetAllTypes().Where(t => !t.IsEnumEntity()).ToDictionary(t => t.NicePluralName().ToOmniboxPascal(), "Translated Types"));
+               GetAllTypes().Where(t => !t.IsEnumEntityOrSymbol()).ToDictionary(t => t.NicePluralName().ToOmniboxPascal(), "Translated Types"));
         }
     }
 
@@ -260,10 +261,5 @@ namespace Signum.Entities.Omnibox
         Number,
         String,
         Entity,
-    }
-
-    public static class OmniboxPermission
-    {
-        public static readonly PermissionSymbol OmniboxInAssemblyLanguage = new PermissionSymbol();
     }
 }

@@ -10,7 +10,7 @@ using System.Linq.Expressions;
 namespace Signum.Entities.Processes
 {
     [Serializable, EntityKind(EntityKind.Part, EntityData.Transactional)]
-    public class PackageDN : IdentifiableEntity, IProcessDataDN
+    public class PackageDN : Entity, IProcessDataDN
     {
         [SqlDbType(Size = 200)]
         string name;
@@ -22,8 +22,8 @@ namespace Signum.Entities.Processes
         }
 
         [SqlDbType(Size = int.MaxValue)]
-        string operationArguments;
-        public string OperationArguments
+        byte[] operationArguments;
+        public byte[] OperationArguments
         {
             get { return operationArguments; }
             private set { Set(ref operationArguments, value); }
@@ -32,8 +32,8 @@ namespace Signum.Entities.Processes
         [HiddenProperty]
         public object[] OperationArgs
         {
-            get { return OperationArguments.HasText() ? (object[])Serialization.FromString(OperationArguments) : null;}
-            set { OperationArguments = value == null ? null : Serialization.ToString(value); }
+            get { return OperationArguments != null ? (object[])Serialization.FromBytes(OperationArguments) : null;}
+            set { OperationArguments = value == null ? null : Serialization.ToBytes(value); }
         }
 
         public override string ToString()

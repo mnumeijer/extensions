@@ -8,7 +8,6 @@
 @using Signum.Entities.Translation
 @{
     CultureInfo culture = ViewBag.Culture;
-    CultureInfo defaultCulture = CultureInfo.GetCultureInfo(TranslatedInstanceLogic.DefaultCulture);
 
     ViewBag.Title = TranslationMessage.Synchronize0In1.NiceToString().Formato(Model.Type.NiceName(), culture.DisplayName);
 
@@ -19,24 +18,7 @@
         ViewBag.Title = ViewBag.Title + " [{0}/{1}]".Formato(Model.Instances.Count, totalInstances);
     }
 
-    Func<IEnumerable<string>, List<SelectListItem>> selectListItems = values =>
-    {
-        var items = values.Select(s => new SelectListItem { Value = s, Text = s }).ToList();
 
-        if (values.Count() > 1 && values.Distinct().Count() == 1)
-        {
-            items.First().Selected = true;
-            items.Insert(0, new SelectListItem { Value = "", Text = "-" });
-        }
-        else
-        {
-            items.Insert(0, new SelectListItem { Value = "", Text = "-", Selected = true });
-        }
-
-        return items;
-    };
-
-    Func<LocalizedType, string> locKey = lt => lt.Type.Name + "." + lt.Assembly.Culture.Name;
 }
 
 @Html.ScriptsJs("~/Translation/resources/" + CultureInfo.CurrentCulture.Name + ".js")
@@ -64,25 +46,37 @@ else
                 </tr>
             </thead>
            
-            foreach (var route in instance.RouteConflicts)
+            foreach (var route in instance.RouteConflicts.OrderBy(a=>a.Key.ToString()))
             {
-
+                var propertyString = route.Key.ToString();
             <tr>
                 <th class="leftCell">@TranslationMessage.Property.NiceToString()
                 </th>
-                <th>@route.Key.PropertyString()</th>
+                <th>@propertyString</th>
             </tr>
                 foreach (var mc in route.Value)
                 {
             <tr>
                 <td class="leftCell">@mc.Key.Name</td>
                 <td class="monospaceCell">
-                    @if (mc.Key.Equals(defaultCulture))
+                    @if (mc.Key.Equals(TranslatedInstanceLogic.DefaultCulture))
                     {
-                        string originalName = defaultCulture.Name + "#" + instance.Instance.Key() + "#" + route.Key.PropertyString();
-                        <textarea name="@originalName" style="display:none" >@route.Value.Single(kvp => kvp.Key.Equals(defaultCulture)).Value.Original</textarea>
+                        string originalName = TranslatedInstanceLogic.DefaultCulture.Name + "#" + instance.Instance.Key() + "#" + propertyString;
+                        <textarea name="@originalName" style="display:none" >@mc.Value.Original</textarea>
                     }
-                    <span>@mc.Value.Original</span>
+
+                    @if (mc.Value.OldOriginal != null)
+                    {
+                        <pre>@TranslationClient.Diff(mc.Value.OldOriginal, mc.Value.Original)</pre>
+                    }
+                    else if(TranslatedInstanceLogic.RouteType(route.Key.Route).Value == TraducibleRouteType.Html)
+                    {
+                        <pre>@mc.Value.Original</pre>
+                    }
+                    else
+                    {
+                        <pre>@mc.Value.Original</pre>   
+                    }
                 </td>
             </tr>
                 }
@@ -90,20 +84,34 @@ else
                 <td class="leftCell">@culture.Name</td>
                 <td class="monospaceCell">
                     @{  
-                var translations = route.Value.Values.Select(a => a.AutomaticTranslation);
+                var translations = route.Value.Where(kvp => kvp.Value.OldTranslation != null)
+                    .Select(kvp => new SelectListItem { Text = "old translation - " + kvp.Value.OldTranslation, Value = kvp.Value.OldTranslation })
+                    .Concat(route.Value.Select(kvp => new SelectListItem { Text = "from " + kvp.Key + " - " + kvp.Value.AutomaticTranslation, Value = kvp.Value.AutomaticTranslation }))
+                    .ToList();
 
-
-                string elementName = culture.Name + "#" + instance.Instance.Key() + "#" + route.Key.PropertyString();
+                string elementName = culture.Name + "#" + instance.Instance.Key() + "#" + propertyString;
                 if (translations.Count() == 1)
                 {       
-                    <textarea name="@(elementName)_original" style="display:none" disabled="disabled">@translations.First()</textarea>
-                    <textarea name="@elementName" style="width:90%" data-original="@translations.First()">@translations.First()</textarea>
-                    <button class="rememberChange">@TranslationJavascriptMessage.RememberChange.NiceToString()</button>
+                        <textarea name="@(elementName)_original" style="display:none" disabled="disabled">@translations.First().Value</textarea>
+                        <textarea name="@elementName" style="width:90%" data-original="@translations.First().Value">@translations.First().Value</textarea>
+                    if (TranslationClient.Translator is ITranslatorWithFeedback)
+                    {
+                        <button class="rememberChange">@TranslationJavascriptMessage.RememberChange.NiceToString()</button>
+                    }
                 }
                 else
                 {
-                    var items = selectListItems(translations);
-                        @Html.DropDownList(elementName, items);
+                    if (translations.Count() > 1 && translations.Select(a => a.Value).Distinct().Count() == 1)
+                    {
+                        translations.First().Selected = true;
+                        translations.Insert(0, new SelectListItem { Value = "", Text = "-" });
+                    }
+                    else
+                    {
+                        translations.Insert(0, new SelectListItem { Value = "", Text = "-", Selected = true });
+                    }
+                    
+                        @Html.DropDownList(elementName, translations);
                         <a href="#" class="edit">@TranslationMessage.Edit.NiceToString()</a>
                 }
                     }
@@ -118,6 +126,7 @@ else
 
 <script>
     $(function () {
-        @(new JsFunction(TranslationClient.Module, "editAndRemember", TranslationClient.Translator is ITranslatorWithFeedback))
+        @(TranslationClient.Module["editAndRemember"](TranslationClient.Translator is ITranslatorWithFeedback))
+        @(TranslationClient.Module["fixTextAreas"]())
     });
 </script>

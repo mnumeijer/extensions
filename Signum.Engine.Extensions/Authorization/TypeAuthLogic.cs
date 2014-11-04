@@ -41,7 +41,7 @@ namespace Signum.Engine.Authorization
                 sb.Schema.EntityEventsGlobal.Retrieved += EntityEventsGlobal_Retrieved;
                 sb.Schema.IsAllowedCallback += Schema_IsAllowedCallback;
 
-                sb.Schema.Initializing[InitLevel.Level0SyncEntities] += () =>
+                sb.Schema.Initializing += () =>
                 {
                     foreach (var type in TypeConditionLogic.Types)
                     {
@@ -53,7 +53,7 @@ namespace Signum.Engine.Authorization
 
                 cache = new TypeAuthCache(sb, merger: TypeAllowedMerger.Instance);
 
-                AuthLogic.ExportToXml += () => cache.ExportXml();
+                AuthLogic.ExportToXml += exportAll => cache.ExportXml(exportAll ? TypeLogic.TypeToDN.Keys.ToList() : null);
                 AuthLogic.ImportFromXml += (x, roles, replacements) => cache.ImportXml(x, roles, replacements);
                 AuthLogic.SuggestRuleChanges += SuggestTypeRules;
             }
@@ -117,7 +117,7 @@ namespace Signum.Engine.Authorization
         static void RegisterSchemaEvent<T>(Schema sender)
              where T : IdentifiableEntity
         {
-            sender.EntityEvents<T>().FilterQuery += new FilterQueryEventHandler<T>(TypeAuthLogic_FilterQuery);
+            sender.EntityEvents<T>().FilterQuery += new FilterQueryEventHandler<T>(TypeAuthLogic_FilterQuery<T>);
         }
 
         public static void AssertStarted(SchemaBuilder sb)

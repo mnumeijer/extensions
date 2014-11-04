@@ -10,7 +10,7 @@ using System.Reflection;
 namespace Signum.Entities.Authorization
 {
     [Serializable, EntityKind(EntityKind.System, EntityData.Master)]
-    public class RuleDN<R, A> : IdentifiableEntity
+    public class RuleDN<R, A> : Entity
         where R: IdentifiableEntity
     {
         Lite<RoleDN> role;
@@ -63,31 +63,17 @@ namespace Signum.Entities.Authorization
     [Serializable]
     public class RuleTypeDN : RuleDN<TypeDN, TypeAllowed> 
     {
-        [ValidateChildProperty, NotNullable]
+        [ValidateChildProperty, NotNullable, PreserveOrder]
         MList<RuleTypeConditionDN> conditions = new MList<RuleTypeConditionDN>();
         public MList<RuleTypeConditionDN> Conditions
         {
             get { return conditions; }
             set { Set(ref conditions, value); }
         }
-
-        protected override void PreSaving(ref bool graphModified)
-        {
-            this.Conditions.ForEach((a, i) => a.Order = i); 
-
-            base.PreSaving(ref graphModified);
-        }
-
-        protected override void PostRetrieving()
-        {
-            this.Conditions.Sort(a => a.Order);
-
-            base.PostRetrieving();
-        }
     }
 
     [Serializable]
-    public class RuleTypeConditionDN : EmbeddedEntity, IEquatable<RuleTypeConditionDN>
+    public class RuleTypeConditionDN : EmbeddedEntity, IEquatable<RuleTypeConditionDN> 
     {
         TypeConditionSymbol condition;
         [NotNullValidator]
@@ -97,19 +83,11 @@ namespace Signum.Entities.Authorization
             set { Set(ref condition, value); }
         }
 
-
         TypeAllowed allowed;
         public TypeAllowed Allowed
         {
             get { return allowed; }
             set { Set(ref allowed, value); }
-        }
-
-        int order;
-        public int Order
-        {
-            get { return order; }
-            set { Set(ref order, value); }
         }
 
         public bool Equals(RuleTypeConditionDN other)

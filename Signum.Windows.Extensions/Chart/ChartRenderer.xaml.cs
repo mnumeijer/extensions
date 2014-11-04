@@ -24,6 +24,7 @@ using Signum.Entities.UserQueries;
 using System.Collections.ObjectModel;
 using Signum.Services;
 using System.Threading;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Windows.Chart
 {
@@ -78,7 +79,7 @@ namespace Signum.Windows.Chart
             if (!(DataContext is ChartRequest))
                 return;
 
-            Settings = Navigator.GetQuerySettings(Request.QueryName);
+            Settings = Finder.GetQuerySettings(Request.QueryName);
             Description = DynamicQueryServer.GetQueryDescription(Request.QueryName);
         }
 
@@ -135,7 +136,7 @@ namespace Signum.Windows.Chart
             if (Request.GroupResults)
             {
                 //so the values don't get affected till next SetResults
-                var filters = Request.Filters.Select(f => new FilterOption { Path = f.Token.FullKey(), Value = f.Value, Operation = f.Operation }).ToList();
+                var filters = Request.Filters.Select(f => new FilterOption { ColumnName = f.Token.FullKey(), Value = f.Value, Operation = f.Operation }).ToList();
                 var keyColunns = Request.Columns
                     .Zip(ResultTable.Columns, (t, c) => new { t.Token, Column = c })
                     .Where(a => !(a.Token.Token is AggregateToken)).ToArray();
@@ -144,7 +145,7 @@ namespace Signum.Windows.Chart
                 {
                     KeyColumns = Request.Columns.Iterate()
                     .Where(a => a.Value.ScriptColumn.IsGroupKey)
-                    .Select(a => new KeyColumn { Position = a.Position, Token = a.Value.Token.Token })
+                    .Select(a => new KeyColumn { Position = a.Position, Token = a.Value.Token.Try(t=>t.Token) })
                     .ToList(),
                     Filters = Request.Filters.Where(a => !(a.Token is AggregateToken)).Select(f => new FilterOption
                     {
@@ -311,14 +312,14 @@ namespace Signum.Windows.Chart
             {
                 Lite<IdentifiableEntity> lite = row.Entity;
 
-                if (Navigator.IsNavigable(lite.EntityType, isSearchEntity: true))
+                if (Navigator.IsNavigable(lite.EntityType, isSearch: true))
                     Navigator.NavigateUntyped(lite);
             }
             else
             {
                 var subFilters = lastRequest.GetFilter(row);
 
-                Navigator.Explore(new ExploreOptions(Request.QueryName)
+                Finder.Explore(new ExploreOptions(Request.QueryName)
                 {
                     FilterOptions = lastRequest.Filters.Concat(subFilters).ToList(),
                     SearchOnLoad = true,
@@ -364,7 +365,7 @@ namespace Signum.Windows.Chart
             {
                 Lite<IdentifiableEntity> lite = (Lite<IdentifiableEntity>)FilterValueConverter.Parse(dic["entity"], this.Description.Columns.Single(a => a.IsEntity).Type, isList: false);
 
-                if (Navigator.IsNavigable(lite.EntityType, isSearchEntity: true))
+                if (Navigator.IsNavigable(lite.EntityType, isSearch: true))
                     Navigator.NavigateUntyped(lite, new NavigateOptions());
             }
             else
@@ -372,7 +373,7 @@ namespace Signum.Windows.Chart
                 var subFilters = lastRequest.KeyColumns.Select(t => 
                     new FilterOption(t.Token.FullKey(), FilterValueConverter.Parse(dic["c" + t.Position], t.Token.Type, isList: false)));
 
-                Navigator.Explore(new ExploreOptions(Request.QueryName)
+                Finder.Explore(new ExploreOptions(Request.QueryName)
                 {
                     FilterOptions = lastRequest.Filters.Concat(subFilters).ToList(),
                     SearchOnLoad = true,

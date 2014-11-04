@@ -60,7 +60,7 @@ namespace Signum.Engine.Mailing
                         SmtpConfiguration = template.SmtpConfiguration,
                     };
 
-                    CultureInfo ci = recipients.Where(a => a.Kind == EmailRecipientKind.To).Select(a => a.OwnerData.CultureInfo).FirstOrDefault();
+                    CultureInfo ci = recipients.Where(a => a.Kind == EmailRecipientKind.To).Select(a => a.OwnerData.CultureInfo).FirstOrDefault().ToCultureInfo();
                     
                     EmailTemplateMessageDN message = template.GetCultureMessage(ci) ?? template.GetCultureMessage(EmailLogic.Configuration.DefaultCulture.ToCultureInfo());
 
@@ -290,7 +290,7 @@ namespace Signum.Engine.Mailing
                 var columns = tokens.Distinct().Select(qt => new Column(qt, null)).ToList();
 
                 var filters = systemEmail != null ? systemEmail.GetFilters(qd) :
-                    new List<Filter> { new Filter(QueryUtils.Parse("Entity", qd, false), FilterOperation.EqualTo, entity.ToLite()) };
+                    new List<Filter> { new Filter(QueryUtils.Parse("Entity", qd, 0), FilterOperation.EqualTo, entity.ToLite()) };
 
                 this.table = DynamicQueryManager.Current.ExecuteQuery(new QueryRequest
                 {

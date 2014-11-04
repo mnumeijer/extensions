@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using Selenium;
 using Signum.Entities.Chart;
-using Signum.Entities.ControlPanel;
 using Signum.Utilities;
 using Signum.Web.Selenium;
 
@@ -81,7 +80,7 @@ namespace Signum.Web.Selenium
 
         public NormalPage<UserChartDN> NewUserChart()
         {
-            Selenium.Click(MenuOptionLocator("tmUserCharts", "qbUserChartNew"));
+            Selenium.MouseUp(MenuOptionLocator("tmUserCharts", "qbUserChartNew"));
             Selenium.WaitForPageToLoad();
             return new NormalPage<UserChartDN>(Selenium); 
         }
@@ -109,7 +108,7 @@ namespace Signum.Web.Selenium
     {
         public static ChartPageProxy OpenChart(this SearchControlProxy searchControl)
         {
-            searchControl.Selenium.Click("jq=#qbChartNew");
+            searchControl.Selenium.MouseUp("jq=#qbChartNew");
             searchControl.Selenium.WaitForPageToLoad();
             return new ChartPageProxy(searchControl.Selenium);
         }

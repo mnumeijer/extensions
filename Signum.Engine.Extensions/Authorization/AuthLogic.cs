@@ -78,13 +78,6 @@ namespace Signum.Engine.Authorization
                 CultureInfoLogic.AssertStarted(sb); 
 
                 sb.Include<UserDN>();
-                UserDN.EmailOwnerDataExpression = entity => new EmailOwnerData
-                {
-                    Owner = entity.ToLite(),
-                    CultureInfo = entity.CultureInfo.ToCultureInfo(),
-                    DisplayName = entity.UserName,
-                    Email = entity.Email,
-                };
                 
                 sb.Include<RoleDN>();
                 sb.Include<LastAuthRulesImportDN>(); 
@@ -145,7 +138,6 @@ namespace Signum.Engine.Authorization
                         e.Email,
                         e.Role,
                         e.State,
-                        e.Related,
                     });
 
                 UserGraph.Register();
@@ -364,16 +356,13 @@ namespace Signum.Engine.Authorization
             return roles.Value.IndirectlyRelatedTo(role).Count;
         }
 
-        public static event Func<XElement> ExportToXml;
+        public static event Func<bool, XElement> ExportToXml;
         public static event Func<XElement, Dictionary<string, Lite<RoleDN>>, Replacements, SqlPreCommand> ImportFromXml;
         public static event Func<Action<Lite<RoleDN>>> SuggestRuleChanges;
 
         public static void SuggestChanges()
         {
-            if (SuggestRuleChanges == null)
-                return;
-
-            foreach (var item in SuggestRuleChanges.GetInvocationList().Cast<Func<Action<Lite<RoleDN>>>>())
+            foreach (var item in SuggestRuleChanges.GetInvocationListTyped())
             {
                 if (SafeConsole.Ask("{0}?".Formato(item.Method.Name.NiceName())))
                 {
@@ -392,7 +381,7 @@ namespace Signum.Engine.Authorization
             }
         }
 
-        public static XDocument ExportRules()
+        public static XDocument ExportRules(bool exportAll = false)
         {
             var imported = Database.Query<LastAuthRulesImportDN>().SingleOrDefault();
 
@@ -406,7 +395,7 @@ namespace Signum.Engine.Authorization
                             new XAttribute("Name", r.ToString()),
                             GetMergeStrategy(r) == MergeStrategy.Intersection? new XAttribute("MergeStrategy", MergeStrategy.Intersection) : null,
                             new XAttribute("Contains", roles.Value.RelatedTo(r).ToString(","))))),
-                     ExportToXml == null ? null : ExportToXml.GetInvocationList().Cast<Func<XElement>>().Select(a => a()).NotNull().OrderBy(a => a.Name.ToString())));
+                     ExportToXml.GetInvocationListTyped().Select(a => a(exportAll)).NotNull().OrderBy(a => a.Name.ToString())));
         }
 
         public static SqlPreCommand ImportRulesScript(XDocument doc)
@@ -454,8 +443,7 @@ namespace Signum.Engine.Authorization
                     new SqlPreCommandSimple("-- Alien role {0} not configured!!".Formato(n))
                 ).Combine(Spacing.Simple);
 
-            SqlPreCommand result = ImportFromXml.GetInvocationList()
-                .Cast<Func<XElement, Dictionary<string, Lite<RoleDN>>, Replacements, SqlPreCommand>>()
+            SqlPreCommand result = ImportFromXml.GetInvocationListTyped()
                 .Select(inv => inv(doc.Root, rolesDic, replacements)).Combine(Spacing.Triple);
 
             result = SqlPreCommand.Combine(Spacing.Triple, result, UpdateLastAuthRules(doc.Root.Element("Exported")));

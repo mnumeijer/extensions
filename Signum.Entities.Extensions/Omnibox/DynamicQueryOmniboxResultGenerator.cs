@@ -12,6 +12,7 @@ using Signum.Entities.Basics;
 using Signum.Entities.UserQueries;
 using System.Collections.Concurrent;
 using System.Globalization;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Entities.Omnibox
 {
@@ -55,7 +56,7 @@ namespace Signum.Entities.Omnibox
                 {
                     QueryDescription description = OmniboxParser.Manager.GetDescription(match.Value);
 
-                    IEnumerable<IEnumerable<FilterQuery>> bruteFilters = syntaxSequence.Select(a => GetFilterQueries(rawQuery, description, a, tokens));
+                    IEnumerable<IEnumerable<OmniboxFilterResult>> bruteFilters = syntaxSequence.Select(a => GetFilterQueries(rawQuery, description, a, tokens));
 
                     foreach (var list in bruteFilters.CartesianProduct())
                     {
@@ -74,14 +75,14 @@ namespace Signum.Entities.Omnibox
                     {
                         QueryDescription description = OmniboxParser.Manager.GetDescription(match.Value);
 
-                        foreach (var qt in QueryUtils.SubTokens(null, description, canAggregate: false))
+                        foreach (var qt in QueryUtils.SubTokens(null, description, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement))
                         {
                             yield return new DynamicQueryOmniboxResult
                             {
                                 QueryName = match.Value,
                                 QueryNameMatch = match,
                                 Distance = match.Distance,
-                                Filters = new List<FilterQuery> { new FilterQuery(0, null, qt, null) },
+                                Filters = new List<OmniboxFilterResult> { new OmniboxFilterResult(0, null, qt, null) },
                             };
                         }
                     }
@@ -92,7 +93,7 @@ namespace Signum.Entities.Omnibox
                             QueryName = match.Value,
                             QueryNameMatch = match,
                             Distance = match.Distance,
-                            Filters = new List<FilterQuery>()
+                            Filters = new List<OmniboxFilterResult>()
                         };
                     }
                 }
@@ -100,9 +101,9 @@ namespace Signum.Entities.Omnibox
 
         }
 
-        protected IEnumerable<FilterQuery> GetFilterQueries(string rawQuery, QueryDescription queryDescription, FilterSyntax syntax, List<OmniboxToken> tokens)
+        protected IEnumerable<OmniboxFilterResult> GetFilterQueries(string rawQuery, QueryDescription queryDescription, FilterSyntax syntax, List<OmniboxToken> tokens)
         {
-            List<FilterQuery> result = new List<FilterQuery>();
+            List<OmniboxFilterResult> result = new List<OmniboxFilterResult>();
 
             int operatorIndex = syntax.Index + syntax.TokenLength;
 
@@ -119,14 +120,14 @@ namespace Signum.Entities.Omnibox
                 {
                     if (tokens[operatorIndex - 1].Next(rawQuery) == '.' && pair.Item2.All(a => ((QueryToken)a.Value).ToString().ToOmniboxPascal() == a.Text))
                     {
-                        foreach (var qt in QueryUtils.SubTokens(pair.Item1, queryDescription, canAggregate: false))
+                        foreach (var qt in QueryUtils.SubTokens(pair.Item1, queryDescription, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement))
                         {
-                            result.Add(new FilterQuery(distance, syntax, qt, tokenMatches));
+                            result.Add(new OmniboxFilterResult(distance, syntax, qt, tokenMatches));
                         }
                     }
                     else
                     {
-                        result.Add(new FilterQuery(distance, syntax, token, tokenMatches));
+                        result.Add(new OmniboxFilterResult(distance, syntax, token, tokenMatches));
                     }
                 }
                 else
@@ -135,7 +136,7 @@ namespace Signum.Entities.Omnibox
 
                     if (canFilter.HasText())
                     {
-                        result.Add(new FilterQuery(distance, syntax, token, tokenMatches)
+                        result.Add(new OmniboxFilterResult(distance, syntax, token, tokenMatches)
                         {
                             CanFilter = canFilter,
                         });
@@ -150,7 +151,7 @@ namespace Signum.Entities.Omnibox
 
                             if (suggested == null)
                             {
-                                result.Add(new FilterQuery(distance, syntax, token, tokenMatches)
+                                result.Add(new OmniboxFilterResult(distance, syntax, token, tokenMatches)
                                 {
                                     Operation = operation,
                                 });
@@ -159,7 +160,7 @@ namespace Signum.Entities.Omnibox
                             {
                                 foreach (var item in suggested)
                                 {
-                                    result.Add(new FilterQuery(distance, syntax, token, tokenMatches)
+                                    result.Add(new OmniboxFilterResult(distance, syntax, token, tokenMatches)
                                     {
                                         Operation = operation,
                                         Value = item.Value
@@ -173,7 +174,7 @@ namespace Signum.Entities.Omnibox
 
                             foreach (var value in values)
                             {
-                                result.Add(new FilterQuery(distance, syntax, token, tokenMatches)
+                                result.Add(new OmniboxFilterResult(distance, syntax, token, tokenMatches)
                                 {
                                     Operation = operation,
                                     Value = value.Value,
@@ -338,7 +339,7 @@ namespace Signum.Entities.Omnibox
 
             bool isPascal = OmniboxUtils.IsPascalCasePattern(omniboxToken.Value);
 
-            var dic = QueryUtils.SubTokens(queryToken, queryDescription, canAggregate: false).ToDictionary(qt => qt.ToString().ToOmniboxPascal(), "translations");
+            var dic = QueryUtils.SubTokens(queryToken, queryDescription, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement).ToDictionary(qt => qt.ToString().ToOmniboxPascal(), "translations");
 
             var matches = OmniboxUtils.Matches(dic, qt => qt.IsAllowed() == null, omniboxToken.Value, isPascal);
 
@@ -399,7 +400,7 @@ namespace Signum.Entities.Omnibox
     {
         public object QueryName { get; set; }
         public OmniboxMatch QueryNameMatch { get; set; }
-        public List<FilterQuery> Filters { get; set; }
+        public List<OmniboxFilterResult> Filters { get; set; }
 
         public override string ToString()
         {
@@ -415,9 +416,9 @@ namespace Signum.Entities.Omnibox
 
     }
 
-    public class FilterQuery
+    public class OmniboxFilterResult
     {
-        public FilterQuery(float distance, FilterSyntax syntax, DynamicQuery.QueryToken queryToken, OmniboxMatch[] omniboxMatch)
+        public OmniboxFilterResult(float distance, FilterSyntax syntax, DynamicQuery.QueryToken queryToken, OmniboxMatch[] omniboxMatch)
         {
             this.Distance = distance;
             this.Syntax = syntax;

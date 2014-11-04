@@ -31,7 +31,7 @@ namespace Signum.Web.Translation.Controllers
         }
 
         [HttpGet]
-        public new ActionResult View(string type, string culture, bool searchPressed, string filter)
+        public ActionResult View(string type, string culture, bool searchPressed, string filter)
         {
             Type t = TypeLogic.GetType(type);
             ViewBag.Type = t;
@@ -57,11 +57,9 @@ namespace Signum.Web.Translation.Controllers
              Type t = TypeLogic.GetType(type);
              var c = CultureInfo.GetCultureInfo(culture);
 
-            var bytes = TranslatedInstanceLogic.GetExcelFile(t, c);
+            var file = TranslatedInstanceLogic.ExportExcelFile(t, c);
 
-            var fileName = "{0}.{1}.View.xlsx".Formato(type, c.Name);
-
-            return File(bytes, MimeType.FromFileName(fileName), fileName);  
+            return File(file.Content, MimeType.FromFileName(file.FileName), file.FileName);  
         }
 
         [HttpPost]
@@ -79,23 +77,28 @@ namespace Signum.Web.Translation.Controllers
         }
 
 
-        static Regex regex = new Regex(@"^(?<lang>[^#]+)#(?<instance>[^#]+)#(?<route>[^#]+)$");
+        static Regex regexRecord = new Regex(@"^(?<lang>[^#]+)#(?<instance>[^#]+)#(?<route>[^#]+)$");
+        static Regex regexIndexer = new Regex(@"\[(?<num>\d+)\]\."); 
+
 
         private List<TranslationRecord> GetTranslationRecords(Type type)
         {
             var list = (from k in Request.Form.AllKeys
-                        let m = regex.Match(k)
+                        let m = regexRecord.Match(k)
                         where m.Success
+                        let route = m.Groups["route"].Value
                         select new TranslationRecord
                         {
                             Culture = CultureInfo.GetCultureInfo(m.Groups["lang"].Value),
                             Key = new LocalizedInstanceKey(
-                                PropertyRoute.Parse(type, m.Groups["route"].Value), 
-                                Lite.Parse(m.Groups["instance"].Value)),
+                                PropertyRoute.Parse(type, regexIndexer.Replace(route, "/")),
+                                Lite.Parse(m.Groups["instance"].Value),
+                                regexIndexer.Match(route).Let(mi => mi.Success ? int.Parse(mi.Groups["num"].Value) : (int?)null)
+                                ),
                             TranslatedText = Request.Form[k].DefaultText(null),
                         }).ToList();
 
-            var master = list.Extract(a => a.Culture.Name == TranslatedInstanceLogic.DefaultCulture).ToDictionary(a=>a.Key);
+            var master = list.Extract(a => a.Culture.Name == TranslatedInstanceLogic.DefaultCulture.Name).ToDictionary(a=>a.Key);
 
             list.ForEach(r => r.OriginalText = master.GetOrThrow(r.Key).TranslatedText);
 
@@ -124,15 +127,9 @@ namespace Signum.Web.Translation.Controllers
 
             CultureInfo c = CultureInfo.GetCultureInfo(culture);
 
-            CultureInfo master = CultureInfo.GetCultureInfo(TranslatedInstanceLogic.DefaultCulture);
+            var file = TranslatedInstanceLogic.ExportExcelFileSync(t, c);
 
-            var changes = TranslatedInstanceLogic.GetInstanceChanges(t, c, new List<CultureInfo> { master });
-
-            byte[] bytes = TranslatedInstanceLogic.GetSyncExcelFile(changes, master, c);
-
-            string fileName = "{0}.{1}.Sync.xlsx".Formato(type, c.Name);
-
-            return File(bytes, MimeType.FromFileName(fileName), fileName);  
+            return File(file.Content, MimeType.FromFileName(file.FileName), file.FileName);  
         }
 
         [HttpPost]
@@ -157,9 +154,9 @@ namespace Signum.Web.Translation.Controllers
             var type = TypeLogic.GetType(hpf.FileName.Before('.'));
             var culture = CultureInfo.GetCultureInfo(hpf.FileName.After('.').Before('.'));
 
-            TranslatedInstanceLogic.SaveExcelFile(hpf.InputStream, type, culture);
+            var pair = TranslatedInstanceLogic.ImportExcelFile(hpf.InputStream, hpf.FileName);
 
-            return RedirectToAction("View", new { type = TypeLogic.GetCleanName(type), culture = culture.Name, searchPressed = false });
+            return RedirectToAction("View", new { type = TypeLogic.GetCleanName(pair.Type), culture = pair.Culture, searchPressed = false });
         }
 
     }

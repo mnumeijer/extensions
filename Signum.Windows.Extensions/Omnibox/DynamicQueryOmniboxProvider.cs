@@ -10,7 +10,7 @@ using Signum.Entities;
 using System.Windows.Documents;
 using System.Windows.Media;
 using Signum.Entities.Basics;
-using Signum.Entities.UserQueries;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Windows.Omnibox
 {
@@ -23,7 +23,7 @@ namespace Signum.Windows.Omnibox
 
         public override void OnSelected(DynamicQueryOmniboxResult r, Window window)
         {
-            Navigator.Explore(new ExploreOptions(r.QueryNameMatch.Value)
+            Finder.Explore(new ExploreOptions(r.QueryNameMatch.Value)
             {
                 FilterOptions = r.Filters.Select(f =>
                 {

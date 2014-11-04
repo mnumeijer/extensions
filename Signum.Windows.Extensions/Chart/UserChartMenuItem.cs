@@ -13,11 +13,12 @@ using Signum.Services;
 using System.Windows.Documents;
 using Signum.Utilities;
 using Signum.Entities.Chart;
-using Signum.Windows.Reports;
 using Signum.Entities.Authorization;
 using Signum.Windows.Authorization;
 using System.Windows.Data;
 using Signum.Entities.UserQueries;
+using Signum.Windows.UserAssets;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Windows.Chart
 {
@@ -43,7 +44,18 @@ namespace Signum.Windows.Chart
 
         void UserChartMenuItem_Loaded(object sender, RoutedEventArgs e)
         {
-            Initialize(); 
+            var currentEntity = UserAssetsClient.GetCurrentEntity(this);
+
+            if (currentEntity != null)
+                this.Visibility = System.Windows.Visibility.Hidden;
+            else
+                Initialize();
+
+            var autoSet = ChartClient.GetUserChart(ChartWindow);
+
+            if (autoSet != null)
+                using (currentEntity == null ? null : CurrentEntityConverter.SetCurrentEntity(currentEntity))
+                    SetCurrent(autoSet);
         }
 
         ChartRequest ChartRequest
@@ -92,7 +104,7 @@ namespace Signum.Windows.Chart
             
             if (UserCharts.Count > 0)
             {
-                foreach (Lite<UserChartDN> uc in UserCharts)
+                foreach (Lite<UserChartDN> uc in UserCharts.OrderBy(a => a.ToString()))
                 {
                     MenuItem mi = new MenuItem()
                     {
@@ -134,10 +146,7 @@ namespace Signum.Windows.Chart
                 .Bind(MenuItem.VisibilityProperty, this, "CurrentUserChart", notNullAndEditable));
             }
 
-            var autoSet = ChartClient.GetUserChart(ChartWindow);
 
-            if (autoSet != null)
-                SetCurrent(autoSet);
         }
 
         static IValueConverter notNullAndEditable = ConverterFactory.New((UserChartDN uq) => uq != null && !Navigator.IsReadOnly(uq) ? Visibility.Visible : Visibility.Collapsed);
@@ -152,7 +161,7 @@ namespace Signum.Windows.Chart
                 MenuItem b = (MenuItem)e.OriginalSource;
                 Lite<UserChartDN> userChart = (Lite<UserChartDN>)b.Tag;
 
-                var uc = userChart.Retrieve();
+                var uc = Server.Return((IChartServer s) => s.RetrieveUserChart(userChart));
 
                 SetCurrent(uc);
             }
@@ -205,7 +214,7 @@ namespace Signum.Windows.Chart
             if (MessageBox.Show(Window.GetWindow(this), UserQueryMessage.AreYouSureToRemove0.NiceToString().Formato(CurrentUserChart), UserQueryMessage.RemoveUserQuery.NiceToString(),
                 MessageBoxButton.YesNo, MessageBoxImage.Exclamation, MessageBoxResult.No) == MessageBoxResult.Yes)
             {
-                CurrentUserChart.ToLite().Delete(UserChartOperation.Delete);
+                CurrentUserChart.ToLite().DeleteLite(UserChartOperation.Delete);
 
                 CurrentUserChart = null;
 

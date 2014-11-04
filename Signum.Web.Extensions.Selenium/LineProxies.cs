@@ -56,6 +56,9 @@ namespace Signum.Web.Selenium
                     Selenium.IsElementPresent("jq=input[name={0}_Time]".Formato(Prefix)))
                     return Selenium.GetValue(Prefix + "_Date") + " " + Selenium.GetValue(Prefix + "_Time");
 
+                if (Selenium.IsElementPresent("jq=#{0}".Formato(Prefix)))
+                    return Selenium.GetText(Prefix);
+
                 throw new InvalidOperationException("Element {0} not found".Formato(Prefix));
             }
 
@@ -96,7 +99,12 @@ namespace Signum.Web.Selenium
             return ReflectionTools.Parse(StringValue, type);
         }
 
-        public void SetValue(object value, string format)
+        public T GetValue<T>()
+        {
+            return ReflectionTools.Parse<T>(StringValue); 
+        }
+
+        public void SetValue(object value, string format = null)
         {
             StringValue = value == null ? null :
                     value is IFormattable ? ((IFormattable)value).ToString(format, null) :
@@ -665,17 +673,17 @@ namespace Signum.Web.Selenium
         {
         }
 
-        public virtual void MoveUp(int index)
+        public override void MoveUp(int index)
         {
             Selenium.Click("jq=#{0}_{1}_btnUp".Formato(Prefix, index));
         }
 
-        public virtual void MoveDown(int index)
+        public override void MoveDown(int index)
         {
             Selenium.Click("jq=#{0}_{1}_btnDown".Formato(Prefix, index));
         }
 
-        public virtual int ItemsCount()
+        public override int ItemsCount()
         {
             string result = Selenium.GetEval("window.$('#{0}_sfItemsContainer li').length".Formato(ItemsContainerLocator));
 

@@ -6,7 +6,6 @@ using Signum.Entities.DynamicQuery;
 using Signum.Windows.Chart;
 using Signum.Entities.Chart;
 using System.Reflection;
-using Signum.Entities.Reports;
 using Signum.Entities.Authorization;
 using Signum.Windows.Authorization;
 using System.Windows;
@@ -20,6 +19,7 @@ using Signum.Windows.Basics;
 using Signum.Entities.UserQueries;
 using Signum.Services;
 using Signum.Windows.UserQueries;
+using Signum.Windows.UserAssets;
 
 namespace Signum.Windows.Chart
 {
@@ -48,7 +48,7 @@ namespace Signum.Windows.Chart
                 {
                     new EntitySettings<UserChartDN> { View = e => new UserChart(), Icon = ExtensionsImageLoader.GetImageSortName("chartIcon.png") },
                     new EntitySettings<ChartScriptDN> { View = e => new ChartScript(), Icon = ExtensionsImageLoader.GetImageSortName("chartScript.png") },
-                    new EmbeddedEntitySettings<ChartScriptParameterDN> { View = (e,p) => new ChartScriptParameter(p) }
+                    new EmbeddedEntitySettings<ChartScriptParameterDN> { View = e => new ChartScriptParameter() }
                 });
 
                 UserAssetsClient.Start();
@@ -70,9 +70,9 @@ namespace Signum.Windows.Chart
 
                 main.SetValue(processName, 9999, RegistryValueKind.DWord);
 
-                Constructor.Register<UserChartDN>((elem, args) =>
+                Constructor.Register<UserChartDN>(ctx =>
                 {
-                    MessageBox.Show(Window.GetWindow(elem),
+                    MessageBox.Show(Window.GetWindow(ctx.Element),
                         ChartMessage._0CanOnlyBeCreatedFromTheChartWindow.NiceToString().Formato(typeof(UserChartDN).NicePluralName()),
                         ChartMessage.CreateNew.NiceToString(),
                         MessageBoxButton.OK, MessageBoxImage.Information);
@@ -129,7 +129,7 @@ namespace Signum.Windows.Chart
                     Filters = sc.FilterOptions.Select(fo => fo.ToFilter()).ToList(),
                 };
 
-                ChartClient.OpenChartRequest(cr, null);
+                ChartClient.OpenChartRequest(cr, null, null);
             };
 
             return miResult;
@@ -137,27 +137,25 @@ namespace Signum.Windows.Chart
 
         internal static void View(UserChartDN uc, IdentifiableEntity currentEntity)
         {
-            var query = QueryClient.GetQueryName(uc.Query.Key);
-
             if (uc.EntityType != null)
             {
                 if (currentEntity == null)
                 {
-                    var entity = Navigator.Find(new FindOptions(Server.GetType(uc.EntityType.ToString())));
+                    var entity = Finder.Find(new FindOptions(Server.GetType(uc.EntityType.ToString())));
 
                     if (entity == null)
                         return;
 
                     currentEntity = entity.Retrieve();
                 }
-
-                CurrentEntityConverter.SetFilterValues(uc.Filters, currentEntity);
             }
+
+            var query = QueryClient.GetQueryName(uc.Query.Key);
             
-            OpenChartRequest(new ChartRequest(query), uc);
+            OpenChartRequest(new ChartRequest(query), uc, currentEntity);
         }
 
-        internal static void OpenChartRequest(ChartRequest chartRequest, UserChartDN uc)
+        internal static void OpenChartRequest(ChartRequest chartRequest, UserChartDN uc, IdentifiableEntity currentEntity)
         {
             Navigator.OpenIndependentWindow(() => 
             {
@@ -165,11 +163,14 @@ namespace Signum.Windows.Chart
                 {
                     DataContext = chartRequest,
                     Title = ChartMessage.ChartOf0.NiceToString().Formato(QueryUtils.GetNiceName(chartRequest.QueryName)),
-                    Icon = Navigator.Manager.GetFindIcon(chartRequest.QueryName, false) ?? ExtensionsImageLoader.GetImageSortName("chartIcon.png")
+                    Icon = Finder.Manager.GetFindIcon(chartRequest.QueryName, false) ?? ExtensionsImageLoader.GetImageSortName("chartIcon.png")
                 };
 
                 if (uc != null)
                     SetUserChart(crw, uc);
+
+                if (currentEntity != null)
+                    UserAssetsClient.SetCurrentEntity(crw, currentEntity);
 
                 return crw; 
             });

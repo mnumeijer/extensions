@@ -6,6 +6,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using Signum.Engine.Authorization;
+using Signum.Engine.Basics;
 using Signum.Engine.DynamicQuery;
 using Signum.Engine.Maps;
 using Signum.Engine.Operations;
@@ -26,7 +28,6 @@ namespace Signum.Engine.Translation
             return TranslatorUserExpression.Evaluate(entity);
         }
 
-        
   
         public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
         {
@@ -46,6 +47,9 @@ namespace Signum.Engine.Translation
                         Cultures = e.Cultures.Count,
                     });
 
+
+                PermissionAuthLogic.RegisterTypes(typeof(TranslationPermission));
+
                 dqm.RegisterExpression((IUserDN e) => e.TranslatorUser(), () => typeof(TranslatorUserDN).NiceName());
 
                 new Graph<TranslatorUserDN>.Execute(TranslatorUserOperation.Save)
@@ -62,7 +66,7 @@ namespace Signum.Engine.Translation
             }
         }
 
-        public static List<CultureInfo> CurrentCultureInfos(string defaultCulture)
+        public static List<CultureInfo> CurrentCultureInfos(CultureInfo defaultCulture)
         {
             var cultures = CultureInfoLogic.ApplicationCultures;
 
@@ -71,10 +75,10 @@ namespace Signum.Engine.Translation
                 TranslatorUserDN tr = UserDN.Current.TranslatorUser();
 
                 if (tr != null)
-                    cultures = cultures.Where(ci => ci.Name == defaultCulture || tr.Cultures.Any(tc => tc.Culture.ToCultureInfo() == ci));
+                    cultures = cultures.Where(ci => ci.Name == defaultCulture.Name || tr.Cultures.Any(tc => tc.Culture.ToCultureInfo() == ci));
             }
 
-            return cultures.OrderByDescending(a => a.Name == defaultCulture).ThenBy(a => a.Name).ToList();
+            return cultures.OrderByDescending(a => a.Name == defaultCulture.Name).ThenBy(a => a.Name).ToList();
         }
 
 

@@ -35,7 +35,7 @@ namespace Signum.Entities.Authorization
             return null;
         }
 
-        [NotNullable, UniqueIndex, SqlDbType(Size = 100)]
+        [NotNullable, UniqueIndex(AvoidAttachToUniqueIndexes=true), SqlDbType(Size = 100)]
         string userName;
         [StringLengthValidator(AllowNulls = false, Min = 2, Max = 100)]
         public string UserName
@@ -71,13 +71,6 @@ namespace Signum.Entities.Authorization
             set { Set(ref passwordNeverExpires, value); }
         }
        
-        IIdentifiable related;
-        public IIdentifiable Related
-        {
-            get { return related; }
-            set { Set(ref related, value); }
-        }
-
         RoleDN role;
         [NotNullValidator]
         public RoleDN Role
@@ -138,7 +131,13 @@ namespace Signum.Entities.Authorization
             set { UserHolder.Current = value; }
         }
 
-        public static Expression<Func<UserDN, EmailOwnerData>> EmailOwnerDataExpression;
+        public static Expression<Func<UserDN, EmailOwnerData>> EmailOwnerDataExpression = entity => new EmailOwnerData
+        {
+            Owner = entity.ToLite(),
+            CultureInfo = entity.CultureInfo,
+            DisplayName = entity.UserName,
+            Email = entity.Email,
+        };
         public EmailOwnerData EmailOwnerData
         {
             get{ return EmailOwnerDataExpression.Evaluate(this); }
@@ -149,7 +148,7 @@ namespace Signum.Entities.Authorization
     {
         [Ignore]
         New = -1,
-        Created,
+        Saved,
         Disabled,
     }
 

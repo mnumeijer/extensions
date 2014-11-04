@@ -13,11 +13,11 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Signum.Entities.DynamicQuery;
 using Signum.Entities.Chart;
-using Signum.Entities.Reports;
 using Signum.Entities;
 using Signum.Entities.UserQueries;
 using Signum.Windows.Basics;
 using Signum.Utilities;
+using Signum.Entities.UserAssets;
 
 namespace Signum.Windows.Chart
 {
@@ -59,7 +59,7 @@ namespace Signum.Windows.Chart
             if (cr == null || QueryDescription == null)
                 return new List<QueryToken>();
 
-            return token.SubTokens(QueryDescription, canAggregate: cr.GroupResults);
+            return token.SubTokens(QueryDescription, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement  | (cr.GroupResults ? SubTokensOptions.CanAggregate : 0));
         }
 
         private List<QueryToken> QueryTokenBuilderOrders_SubTokensEvent(QueryToken token)
@@ -68,7 +68,7 @@ namespace Signum.Windows.Chart
             if (cr == null || QueryDescription == null)
                 return new List<QueryToken>();
 
-            return token.SubTokens(QueryDescription, canAggregate: cr.GroupResults);
+            return token.SubTokens(QueryDescription, SubTokensOptions.CanElement | (cr.GroupResults ? SubTokensOptions.CanAggregate : 0));
         }
 
         IEnumerable<Lite<IdentifiableEntity>> EntityType_AutoCompleting(string text)

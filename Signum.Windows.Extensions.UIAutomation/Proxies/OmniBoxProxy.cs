@@ -16,7 +16,7 @@ namespace Signum.Windows.UIAutomation
 {
     public class OmniBoxProxy
     {
-        public int OmniboxTimeout = 4000;
+        public int OmniboxTimeout = 10000;
 
         public AutomationElement Element { get; private set; }
 
@@ -62,7 +62,7 @@ namespace Signum.Windows.UIAutomation
                     if (item == null)
                         throw new ElementNotFoundException("{0} not found after writing {1} on the Omnibox".Formato(name, autoCompleteText));
 
-                    var listItem = item.Normalize(a => a.Current.ControlType == ControlType.ListItem);
+                    var listItem = item.Parent(a => a.Current.ControlType == ControlType.ListItem);
 
                     listItem.Pattern<SelectionItemPattern>().Select();
                 },

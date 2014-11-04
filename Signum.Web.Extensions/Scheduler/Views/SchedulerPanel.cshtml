@@ -6,14 +6,15 @@
 @model SchedulerState
 <div>
     <h2>@ViewData[ViewDataKeys.Title]</h2>
+    @Html.AntiForgeryToken()
     <div>
-        <a href="@Url.Action((SchedulerController sc) => sc.Stop())" class="sf-button" style="@(Model.Running ? "" : "display:none");color:red" id="sfSchedulerDisable">Stop </a>
-        <a href="@Url.Action((SchedulerController sc) => sc.Start())" class="sf-button"  style="@(!Model.Running ? "" : "display:none")" id="sfSchedulerEnable">Start </a>
+        <a href="@Url.Action((SchedulerController sc) => sc.Stop())" class="sf-button btn btn-default active" style="@(Model.Running ? "" : "display:none");color:red" id="sfSchedulerDisable">Stop </a>
+        <a href="@Url.Action((SchedulerController sc) => sc.Start())" class="sf-button btn btn-default"  style="@(!Model.Running ? "" : "display:none")" id="sfSchedulerEnable">Start </a>
     </div>
     <script>
         $(function () {
-                @(new JsFunction(SchedulerClient.Module, "initControlPanel"))
-            });
+            @(SchedulerClient.Module["initDashboard"]())
+        });
     </script>
     <div id="schedulerMainDiv">
         <br />

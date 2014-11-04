@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Reflection;
 
 namespace Signum.Entities.Translation
 {
@@ -37,6 +38,13 @@ namespace Signum.Entities.Translation
             set { Set(ref propertyRoute, value); }
         }
 
+        int? rowId;
+        public int? RowId
+        {
+            get { return rowId; }
+            set { Set(ref rowId, value); }
+        }
+
         [NotNullable, SqlDbType(Size = int.MaxValue)]
         string translatedText;
         [StringLengthValidator(AllowNulls = false)]
@@ -59,5 +67,33 @@ namespace Signum.Entities.Translation
         {
             return "{0} {1} {2}".Formato(culture, instance, propertyRoute);
         }
+
+        protected override string PropertyValidation(PropertyInfo pi)
+        {
+            if (pi.Is(() => RowId) && PropertyRoute != null)
+            {
+                if (RowId == null && PropertyRoute.Path.Contains("/"))
+                    return "{0} should be set for route {1}".Formato(pi.NiceName(), PropertyRoute);
+
+                if (RowId != null && !PropertyRoute.Path.Contains("/"))
+                    return "{0} should be null for route {1}".Formato(pi.NiceName(), PropertyRoute);
+            }
+
+            return null;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Field)]
+    public sealed class TranslateFieldAttribute : Attribute
+    {
+        public TraducibleRouteType TraducibleRouteType = TraducibleRouteType.Text;
+        
+      
+    }
+
+    public enum TraducibleRouteType
+    {
+        Text,
+        Html
     }
 }

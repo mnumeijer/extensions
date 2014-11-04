@@ -23,7 +23,7 @@ namespace Signum.Entities.Translation
             set { Set(ref user, value); }
         }
 
-        [NotNullable]
+        [NotNullable, PreserveOrder]
         MList<TranslatorUserCultureDN> cultures = new MList<TranslatorUserCultureDN>();
         [NotNullValidator, NoRepeatValidator]
         public MList<TranslatorUserCultureDN> Cultures
@@ -77,6 +77,11 @@ namespace Signum.Entities.Translation
         Read,
     }
 
+    public static class TranslationPermission
+    {
+        public static readonly PermissionSymbol TranslateCode = new PermissionSymbol();
+        public static readonly PermissionSymbol TranslateInstances = new PermissionSymbol();
+    }
 
     public static class TranslatorUserOperation
     {

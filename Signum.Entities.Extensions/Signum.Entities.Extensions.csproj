@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Signum.Entities.Extensions</RootNamespace>
     <AssemblyName>Signum.Entities.Extensions</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SccProjectName>
     </SccProjectName>
@@ -51,6 +51,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -60,10 +61,12 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Partial|AnyCPU' ">
     <OutputPath>bin\Partial\</OutputPath>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -71,6 +74,7 @@
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel">
       <RequiredTargetFramework>3.0</RequiredTargetFramework>
     </Reference>
@@ -91,13 +95,16 @@
     <Compile Include="Authorization\SessionLog.cs" />
     <Compile Include="Authorization\UserTicket.cs" />
     <Compile Include="Authorization\Services.cs" />
-    <Compile Include="Authorization\Permission.cs" />
+    <Compile Include="Authorization\PermissionSymbol.cs" />
     <Compile Include="Authorization\Rules.cs" />
     <Compile Include="Authorization\Role.cs" />
     <Compile Include="Authorization\ServicesData.cs" />
     <Compile Include="Authorization\User.cs" />
-    <Compile Include="ControlPanel\ControlPanelOmniboxResultGenerator.cs" />
+    <Compile Include="Dashboard\DashboardOmniboxResultGenerator.cs" />
+    <Compile Include="DiffLog\DiffLogMixin.cs" />
+    <Compile Include="DiffLog\Services.cs" />
     <Compile Include="Help\HelpMessage.cs" />
+    <Compile Include="Isolation\IIsolationServer.cs" />
     <Compile Include="Isolation\IsolationDN.cs" />
     <Compile Include="Mailing\EmailMasterTemplate.cs" />
     <Compile Include="Mailing\Pop3Configuration.cs" />
@@ -105,9 +112,9 @@
     <Compile Include="Scheduler\ScheduledTaskLogDN.cs" />
     <Compile Include="Scheduler\ApplicationEventLog.cs" />
     <Compile Include="SMS\SMSConfigurationDN.cs" />
-    <Compile Include="Translation\CultureInfoDN.cs" />
+    <Compile Include="Basics\CultureInfoDN.cs" />
     <Compile Include="Basics\DateSpanDN.cs" />
-    <Compile Include="Basics\TypeConditionName.cs" />
+    <Compile Include="Basics\TypeConditionSymbol.cs" />
     <Compile Include="Basics\PropertyRouteDN.cs" />
     <Compile Include="Basics\QueryDN.cs" />
     <Compile Include="Cache\CachePermissions.cs" />
@@ -123,9 +130,9 @@
     <Compile Include="Chart\ChartUtils.cs" />
     <Compile Include="Chart\IChartServer.cs" />
     <Compile Include="Chart\UserChart.cs" />
-    <Compile Include="ControlPanel\ControlPanelDN.cs" />
-    <Compile Include="ControlPanel\IControlPanelServer.cs" />
-    <Compile Include="ControlPanel\PanelPart.cs" />
+    <Compile Include="Dashboard\DashboardDN.cs" />
+    <Compile Include="Dashboard\IDashboardServer.cs" />
+    <Compile Include="Dashboard\PanelPart.cs" />
     <Compile Include="Disconnected\DisconnectedExportRanges.cs" />
     <Compile Include="Disconnected\DisconnectedImportDN.cs" />
     <Compile Include="Disconnected\DisconnectedMachineDN.cs" />
@@ -148,8 +155,10 @@
     <Compile Include="Notes\Note.cs" />
     <Compile Include="Omnibox\SpecialOmniboxResultGenerator.cs" />
     <Compile Include="Processes\IProcessServer.cs" />
-    <Compile Include="UserQueries\IUserAssetsServer.cs" />
-    <Compile Include="UserQueries\UserAssets.cs" />
+    <Compile Include="UserAssets\IUserAssetsServer.cs" />
+    <Compile Include="UserAssets\QueryToken.cs" />
+    <Compile Include="ViewLog\ViewLogDN.cs" />
+    <Compile Include="UserAssets\UserAssets.cs" />
     <Compile Include="UserQueries\UserQueryOmniboxResultGenerator.cs" />
     <Compile Include="Omnibox\DynamicQueryOmniboxResultGenerator.cs" />
     <Compile Include="Omnibox\EntityOmniboxResultGenerator.cs" />
@@ -161,10 +170,10 @@
     <Compile Include="Profiler\ProfilerPermissions.cs" />
     <Compile Include="SMS\SMSCharacters.cs" />
     <Compile Include="UserQueries\IUserQueryServer.cs" />
-    <Compile Include="Reports\ExcelReportDN.cs" />
+    <Compile Include="Excel\ExcelReportDN.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="UserQueries\FilterValueConverter.cs" />
-    <Compile Include="Reports\IExcelReportServer.cs" />
+    <Compile Include="UserAssets\FilterValueConverter.cs" />
+    <Compile Include="Excel\IExcelReportServer.cs" />
     <Compile Include="UserQueries\UserQueryDN.cs" />
     <Compile Include="Scheduler\HolidayCalendarDN.cs" />
     <Compile Include="Scheduler\ScheduledTaskDN.cs" />

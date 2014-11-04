@@ -50,7 +50,7 @@ namespace Signum.Engine.Files
                 SymbolLogic<FileTypeSymbol>.Start(sb, () => fileTypes.Keys.ToHashSet());
 
                 sb.Schema.EntityEvents<FilePathDN>().PreSaving += FilePath_PreSaving;
-                sb.Schema.EntityEvents<FilePathDN>().PreUnsafeDelete += new DeleteHandler<FilePathDN>(FilePathLogic_PreUnsafeDelete);
+                sb.Schema.EntityEvents<FilePathDN>().PreUnsafeDelete += new PreUnsafeDeleteHandler<FilePathDN>(FilePathLogic_PreUnsafeDelete);
 
                 dqm.RegisterQuery(typeof(FileRepositoryDN), () =>
                     from r in Database.Query<FileRepositoryDN>()
@@ -129,7 +129,7 @@ namespace Signum.Engine.Files
 
         public static FilePathDN UnsafeLoad(FileRepositoryDN repository, FileTypeSymbol fileType, string fullPath)
         {
-            if (!fullPath.StartsWith(repository.FullPhysicalPrefix))
+            if (!fullPath.StartsWith(repository.FullPhysicalPrefix, StringComparison.InvariantCultureIgnoreCase))
                 throw new InvalidOperationException("The File {0} doesn't belong to the repository {1}".Formato(fullPath, repository.PhysicalPrefix));
 
             return new FilePathDN

@@ -15,7 +15,7 @@ namespace Signum.Web.Alerts
     {
         public static string ViewPrefix = "~/Alert/Views/{0}.cshtml";
 
-        public static string Module = "Extensions/Signum.Web.Extensions/Alert/Scripts/Alerts";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Alert/Scripts/Alerts");
 
         public static Type[] Types;
 
@@ -23,6 +23,9 @@ namespace Signum.Web.Alerts
         {
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
+                if (types == null)
+                    throw new ArgumentNullException("types");
+
                 Navigator.RegisterArea(typeof(AlertClient));
 
                 Navigator.AddSettings(new List<EntitySettings>
@@ -37,9 +40,9 @@ namespace Signum.Web.Alerts
 
                 OperationClient.AddSettings(new List<OperationSettings>
                 {
-                    new EntityOperationSettings(AlertOperation.CreateAlertFromEntity){ IsVisible = a => false },
-                    new EntityOperationSettings(AlertOperation.SaveNew){ IsVisible = a => a.Entity.IsNew },
-                    new EntityOperationSettings(AlertOperation.Save){ IsVisible = a => !a.Entity.IsNew }
+                    new EntityOperationSettings<IdentifiableEntity>(AlertOperation.CreateAlertFromEntity){ IsVisible = a => false },
+                    new EntityOperationSettings<AlertDN>(AlertOperation.SaveNew){ IsVisible = a => a.Entity.IsNew },
+                    new EntityOperationSettings<AlertDN>(AlertOperation.Save){ IsVisible = a => !a.Entity.IsNew }
                 });
             }
         }
@@ -53,7 +56,7 @@ namespace Signum.Web.Alerts
             if (!Types.Contains(ie.GetType()))
                 return null;
 
-            if (!Navigator.IsFindable(typeof(AlertDN)))
+            if (!Finder.IsFindable(typeof(AlertDN)))
                 return null;
 
             return AlertWidgetHelper.CreateWidget(ctx);

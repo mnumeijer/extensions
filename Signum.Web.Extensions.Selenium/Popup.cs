@@ -158,6 +158,17 @@ namespace Signum.Web.Selenium
         public string StringValue
         {
             get { return ValueLine.StringValue; }
+            set { ValueLine.StringValue = value; }
+        }
+
+        public T GetValue<T>()
+        {
+            return ValueLine.GetValue<T>(); 
+        }
+
+        public void SetValue(object value, string format = null)
+        {
+            ValueLine.SetValue(value, format);
         }
     }
 
@@ -197,8 +208,17 @@ namespace Signum.Web.Selenium
                         return true;
 
                     if (Selenium.IsElementPresent(CloseButtonLocator))
-                        Selenium.Click(CloseButtonLocator);
-
+                    {
+                        try
+                        {
+                            Selenium.Click(CloseButtonLocator);
+                        }
+                        catch (SeleniumException e)
+                        {
+                            if (!e.Message.Contains("not found"))
+                                throw;
+                        }
+                    }
 
                     if (Selenium.IsConfirmationPresent())
                         confirmation = Selenium.GetConfirmation();

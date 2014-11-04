@@ -8,6 +8,7 @@ using Signum.Utilities;
 using Signum.Engine.Maps;
 using Signum.Engine.DynamicQuery;
 using System.Reflection;
+using Signum.Engine.Basics;
 
 namespace Signum.Engine.Authorization
 {
@@ -34,7 +35,14 @@ namespace Signum.Engine.Authorization
                         sl.SessionEnd,
                         sl.SessionTimeOut
                     });
+
+                ExceptionLogic.DeleteLogs += ExceptionLogic_DeleteLogs;
             }
+        }
+
+        public static void ExceptionLogic_DeleteLogs(DateTime limite)
+        {
+            Database.Query<SessionLogDN>().Where(a => a.SessionStart < limite).UnsafeDelete();
         }
 
         static bool RoleTracked(Lite<RoleDN> role)
@@ -67,27 +75,17 @@ namespace Signum.Engine.Authorization
 
             using (AuthLogic.Disable())
             {
-                using (Transaction tr = new Transaction())
-                {
-                    var log = Database.Query<SessionLogDN>()
-                        .Where(sl => sl.User.RefersTo(user))
-                        .OrderByDescending(sl => sl.SessionStart)
-                        .FirstOrDefault();
+                var sessionEnd = timeOut.HasValue ? TimeZoneManager.Now.Subtract(timeOut.Value).TrimToSeconds() : TimeZoneManager.Now.TrimToSeconds();
 
-                    if (log != null && log.SessionEnd == null)
-                    {
-                        var sessionEnd = timeOut.HasValue ? TimeZoneManager.Now.Subtract(timeOut.Value).TrimToSeconds() : TimeZoneManager.Now.TrimToSeconds();
-
-                        if (sessionEnd < log.SessionStart) //caused by an IIS reset for example
-                            sessionEnd = log.SessionStart;
-
-                        log.SessionEnd = sessionEnd;
-                        log.SessionTimeOut = timeOut.HasValue;
-                        log.Save();
-                    }
-                    tr.Commit();
-                }
-
+                var rows = Database.Query<SessionLogDN>()
+                    .Where(sl => sl.User.RefersTo(user))
+                    .OrderByDescending(sl => sl.SessionStart)
+                    .Take(1)
+                    .Where(sl => sl.SessionEnd == null)
+                    .UnsafeUpdate()
+                    .Set(a => a.SessionEnd, a => sessionEnd)
+                    .Set(a => a.SessionTimeOut, a => timeOut.HasValue)
+                    .Execute();
             }
         }
     }

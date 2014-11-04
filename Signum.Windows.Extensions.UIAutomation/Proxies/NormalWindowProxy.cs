@@ -11,6 +11,7 @@ using Signum.Entities.Reflection;
 using Signum.Entities.Basics;
 using Signum.Entities.DynamicQuery;
 using Signum.Entities.Isolation;
+using System.Diagnostics;
 
 namespace Signum.Windows.UIAutomation
 {
@@ -48,12 +49,12 @@ namespace Signum.Windows.UIAutomation
 
         public string EntityId
         {
-            get { return Element.ChildById("entityTitle").ChildById("tbEntityId").Value(); }
+            get { return Element.WaitChildById("entityTitle").WaitChildById("tbEntityId").Value(); }
         }
 
         public string EntityToStr
         {
-            get { return Element.ChildById("entityTitle").ChildById("tbEntityToStr").Value(); }
+            get { return Element.WaitChildById("entityTitle").WaitChildById("tbEntityToStr").Value(); }
         }
 
         public void Ok()
@@ -105,46 +106,50 @@ namespace Signum.Windows.UIAutomation
             }
         }
 
-        
-
-
-
         public override void Dispose()
         {
-            if (base.Close())
+            try
             {
-                MessageBoxProxy confirmation = null;
-
-                Element.Wait(() =>
+                if (base.Close())
                 {
-                    try
+                    MessageBoxProxy confirmation = null;
+
+                    Element.Wait(() =>
                     {
-                        if (IsClosed)
+                        try
+                        {
+                            if (IsClosed)
+                                return true;
+
+                            confirmation = Element.TryMessageBoxChild();
+
+                            if (confirmation != null)
+                                return true;
+
+                            base.Close();
+
+                            return false;
+                        }
+                        catch (ElementNotAvailableException)
+                        {
                             return true;
+                        }
+                    }, () => "Waiting for normal window to close or show confirmation dialog");
 
-                        confirmation = Element.TryMessageBoxChild();
 
-                        if (confirmation != null)
-                            return true;
-
-                        base.Close();
-
-                        return false;
-                    }
-                    catch (ElementNotAvailableException)
+                    if (confirmation != null && !confirmation.IsError)
                     {
-                        return true;
+                        confirmation.OkButton.ButtonInvoke();
                     }
-                }, () => "Waiting for normal window to close or show confirmation dialog");
-
-
-                if (confirmation != null && !confirmation.IsError)
-                {
-                    confirmation.OkButton.ButtonInvoke();
                 }
-            }
 
-            OnDisposed();
+                OnDisposed();
+            }
+            catch
+            {
+                if (CurrentException == null)
+                    throw;
+            }
         }
 
         public void CloseLooseChanges()
@@ -182,18 +187,18 @@ namespace Signum.Windows.UIAutomation
               where T : IdentifiableEntity
         {
             var entityId = window.EntityId;
-            var button = window.GetOperationButton(symbol.Operation);
+            var button = window.GetOperationButton(symbol.Symbol);
 
             window.Element.WaitDataContextChangedAfter(
                 action: () => button.ButtonInvoke(),
                 timeOut : timeOut ?? OperationTimeouts.ExecuteTimeout,
-                actionDescription: () => "Executing {0} from {1}".Formato(symbol.Operation, entityId));
+                actionDescription: () => "Executing {0} from {1}".Formato(symbol.Symbol, entityId));
         }
 
         public static AutomationElement ExecuteCapture<T>(this NormalWindowProxy<T> window, ExecuteSymbol<T> symbol, int? timeOut = null)
             where T : IdentifiableEntity
         {
-            return window.OperationCapture(symbol.Operation, timeOut); 
+            return window.OperationCapture(symbol.Symbol, timeOut); 
         }
 
         public static NormalWindowProxy<T> ConstructFrom<F, FB, T>(this NormalWindowProxy<F> window, ConstructSymbol<T>.From<FB> symbol, int? timeOut = null)
@@ -201,7 +206,7 @@ namespace Signum.Windows.UIAutomation
             where FB : class, IIdentifiable
             where F : IdentifiableEntity, FB
         {
-            AutomationElement element = window.OperationCapture(symbol.Operation, timeOut);
+            AutomationElement element = window.OperationCapture(symbol.Symbol, timeOut);
 
             return new NormalWindowProxy<T>(element);
         }
@@ -262,8 +267,8 @@ namespace Signum.Windows.UIAutomation
 
     public class OperationTimeouts
     {
-        public static int ExecuteTimeout = 3 * 1000;
-        public static int ConstructFromTimeout = 2 * 1000;
+        public static int ExecuteTimeout = 10 * 1000;
+        public static int ConstructFromTimeout = 10 * 1000;
     }
 
 
@@ -375,12 +380,6 @@ namespace Signum.Windows.UIAutomation
              where T: IdentifiableEntity
         {
             throw new NotImplementedException();
-        }
-
-        public static void SetIsolation<T>(this NormalWindowProxy<T> window, Lite<IsolationDN> isolation)
-            where T : IdentifiableEntity
-        {
-            throw new NotImplementedException(); 
         }
     }
 }

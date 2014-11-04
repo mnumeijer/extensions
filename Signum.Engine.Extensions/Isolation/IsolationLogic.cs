@@ -14,17 +14,26 @@ using Signum.Entities.Isolation;
 using Signum.Utilities;
 using Signum.Utilities.ExpressionTrees;
 using Signum.Utilities.Reflection;
+using Signum.Engine.Processes;
+using Signum.Entities.Processes;
+using System.ServiceModel.Channels;
+using System.ServiceModel;
+using Signum.Engine.Scheduler;
+using Signum.Entities.Scheduler;
 
 namespace Signum.Engine.Isolation
 {
     public enum IsolationStrategy
     {
         Isolated,
+        Optional,
         None,
     }
 
     public static class IsolationLogic
     {
+        public static ResetLazy<List<Lite<IsolationDN>>> Isolations;
+
         internal static Dictionary<Type, IsolationStrategy> strategies = new Dictionary<Type, IsolationStrategy>();
 
         public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
@@ -50,27 +59,44 @@ namespace Signum.Engine.Isolation
                 }.Register();
 
                 sb.Schema.EntityEventsGlobal.PreSaving += EntityEventsGlobal_PreSaving;
-                sb.Schema.Initializing[InitLevel.Level0SyncEntities] += AssertIsolationStrategies;
+                sb.Schema.Initializing += AssertIsolationStrategies;
                 OperationLogic.SurroundOperation += OperationLogic_SurroundOperation;
+
+                Isolations = sb.GlobalLazy(() => Database.RetrieveAllLite<IsolationDN>(),
+                    new InvalidateWith(typeof(IsolationDN)));
+
+                ProcessLogic.ApplySession += ProcessLogic_ApplySession;
+                SchedulerLogic.ApplySession += SchedulerLogic_ApplySession;
+
+                Validator.OverridePropertyValidator((IsolationMixin m) => m.Isolation).StaticPropertyValidation += (mi, pi) =>
+                {
+                    if (strategies.GetOrThrow(mi.MainEntity.GetType()) == IsolationStrategy.Isolated && mi.Isolation == null)
+                        return ValidationMessage._0IsNotSet.NiceToString(pi.NiceName());
+
+                    return null;
+                };
             }
         }
 
-        static IDisposable OperationLogic_SurroundOperation(IOperation operation, IdentifiableEntity entity, object[] args)
+
+        static IDisposable ProcessLogic_ApplySession(ProcessDN process)
         {
-            if (IsolationDN.Current == null)
-                return null;
+            return IsolationDN.Override(process.Data.TryIsolation());
+        }
 
-            Lite<IsolationDN> isolation = (entity == null ? null : entity.TryIsolation()) ?? args.TryGetArgC<Lite<IsolationDN>>();
+        static IDisposable SchedulerLogic_ApplySession(ITaskDN task)
+        {
+            return IsolationDN.Override(task.TryIsolation());
+        }
 
-            if (isolation == null)
-                return null;
-
-            return IsolationDN.Override(isolation);
+        static IDisposable OperationLogic_SurroundOperation(IOperation operation, OperationLogDN log, IdentifiableEntity entity, object[] args)
+        {
+            return IsolationDN.Override(entity.Try(e => e.TryIsolation()) ?? args.TryGetArgC<Lite<IsolationDN>>());
         }
 
         static void EntityEventsGlobal_PreSaving(IdentifiableEntity ident, ref bool graphModified)
         {
-            if (strategies.TryGet(ident.GetType(), IsolationStrategy.None) == IsolationStrategy.Isolated && IsolationDN.Current != null)
+            if (strategies.TryGet(ident.GetType(), IsolationStrategy.None) != IsolationStrategy.None && IsolationDN.Current != null)
             {
                 if (ident.Mixin<IsolationMixin>().Isolation == null)
                 {
@@ -86,7 +112,7 @@ namespace Signum.Engine.Isolation
         {
             var result = EnumerableExtensions.JoinStrict(
                 strategies.Keys,
-                Schema.Current.Tables.Keys.Where(a => !a.IsEnumEntity() && !typeof(Symbol).IsAssignableFrom(a) && !typeof(SemiSymbol).IsAssignableFrom(a)),
+                Schema.Current.Tables.Keys.Where(a => !a.IsEnumEntityOrSymbol() && !typeof(SemiSymbol).IsAssignableFrom(a)),
                 a => a,
                 a => a,
                 (a, b) => 0);
@@ -101,37 +127,114 @@ namespace Signum.Engine.Isolation
                         (extra.HasText() ? ("Remove something like:\r\n" + extra + "\r\n\r\n") : null) +
                         (lacking.HasText() ? ("Add something like:\r\n" + lacking + "\r\n\r\n") : null));
 
-            foreach (var item in strategies.Where(kvp => kvp.Value == IsolationStrategy.Isolated).Select(a => a.Key))
+            foreach (var item in strategies.Where(kvp => kvp.Value == IsolationStrategy.Isolated || kvp.Value == IsolationStrategy.Optional).Select(a => a.Key))
             {
                 giRegisterFilterQuery.GetInvoker(item)(); 
             }
 
-            
+            Schema.Current.EntityEvents<IsolationDN>().FilterQuery += () =>
+            {
+                if (IsolationDN.Current == null || ExecutionMode.InGlobal)
+                    return null;
+
+                return new FilterQueryResult<IsolationDN>(
+                    a => a.ToLite().Is(IsolationDN.Current), 
+                    a => a.ToLite().Is(IsolationDN.Current));
+            };
         }
 
+        public static IsolationStrategy GetStrategy(Type type)
+        {
+            return strategies[type];
+        }
 
         static readonly GenericInvoker<Action> giRegisterFilterQuery = new GenericInvoker<Action>(() => Register_FilterQuery<IdentifiableEntity>());
         static void Register_FilterQuery<T>() where T : IdentifiableEntity
         {
-            Schema.Current.EntityEvents<T>().FilterQuery += query =>
+            Schema.Current.EntityEvents<T>().FilterQuery += () =>
             {
-                if (IsolationDN.Current == null || ExecutionMode.InGlobal)
-                    return query;
+                if (ExecutionMode.InGlobal || IsolationDN.Current == null)
+                    return null;
 
-                Expression<Func<T, bool>> filter = a => a.Mixin<IsolationMixin>().Isolation == IsolationDN.Current;
-
-                filter = (Expression<Func<T, bool>>)DbQueryProvider.Clean(filter, false, null);
-
-                return query.Where(filter);
+                return new FilterQueryResult<T>(
+                    a => a.Mixin<IsolationMixin>().Isolation.Is(IsolationDN.Current),
+                    a => a.Mixin<IsolationMixin>().Isolation.Is(IsolationDN.Current));
             };
+
+            Schema.Current.EntityEvents<T>().PreUnsafeInsert += (IQueryable query, LambdaExpression constructor, IQueryable<T> entityQuery) =>
+            {
+                if (constructor.Body.Type == typeof(T)) 
+                {
+                    var newBody = Expression.Call(
+                      miSetMixin.MakeGenericMethod(typeof(T), typeof(IsolationMixin), typeof(Lite<IsolationDN>)),
+                      constructor.Body,
+                      Expression.Quote(isolationProperty),
+                      Expression.Constant(IsolationDN.Current));
+
+                    return Expression.Lambda(newBody, constructor.Parameters);
+                }
+
+                return constructor; //MListTable
+            }; 
         }
+
+        static MethodInfo miSetMixin = ReflectionTools.GetMethodInfo((IdentifiableEntity a) => a.SetMixin((IsolationMixin m) => m.Isolation, null)).GetGenericMethodDefinition();
+        static Expression<Func<IsolationMixin, Lite<IsolationDN>>> isolationProperty = (IsolationMixin m) => m.Isolation;
+
 
         public static void Register<T>(IsolationStrategy strategy) where T : IdentifiableEntity
         {
             strategies.Add(typeof(T), strategy);
 
-            if (strategy == IsolationStrategy.Isolated)
+            if (strategy == IsolationStrategy.Isolated || strategy == IsolationStrategy.Optional)
                 MixinDeclarations.Register(typeof(T), typeof(IsolationMixin));
+
+            if (strategy == IsolationStrategy.Optional)
+            {
+                Schema.Current.Settings.OverrideAttributes((T e) => e.Mixin<IsolationMixin>().Isolation, new AttachToUniqueIndexesAttribute()); //Remove non-null 
+            }
         }
+
+
+        public static IDisposable IsolationFromOperationContext()
+        {
+            MessageHeaders headers = OperationContext.Current.IncomingMessageHeaders;
+
+            int val = headers.FindHeader("CurrentIsolation", "http://www.signumsoftware.com/Isolation");
+
+            if (val == -1)
+                return null;
+
+            return IsolationDN.Override(Lite.Parse<IsolationDN>(headers.GetHeader<string>(val)));
+        }
+
+        public static IEnumerable<T> WhereCurrentIsolationInMemory<T>(this IEnumerable<T> collection) where T : Entity
+        {
+            var curr = IsolationDN.Current;
+
+            if (curr == null || strategies[typeof(T)] == IsolationStrategy.None)
+                return collection;
+
+            return collection.Where(a => a.Isolation().Is(curr));
+        }
+
+        public static Lite<IsolationDN> GetOnlyIsolation(List<Lite<IdentifiableEntity>> selectedEntities)
+        {
+            return selectedEntities.GroupBy(a => a.EntityType)
+                .Select(gr => strategies[gr.Key] == IsolationStrategy.None ? null : giGetOnlyIsolation.GetInvoker(gr.Key)(gr))
+                .NotNull()
+                .Only();
+        }
+
+
+        static GenericInvoker<Func<IEnumerable<Lite<IdentifiableEntity>>, Lite<IsolationDN>>> giGetOnlyIsolation = 
+            new GenericInvoker<Func<IEnumerable<Lite<IdentifiableEntity>>, Lite<IsolationDN>>>(list => GetOnlyIsolation<IdentifiableEntity>(list));
+        public static Lite<IsolationDN> GetOnlyIsolation<T>(IEnumerable<Lite<IdentifiableEntity>> selectedEntities) where T : IdentifiableEntity
+        {
+            return selectedEntities.Cast<Lite<T>>().GroupsOf(100).Select(gr =>
+                Database.Query<T>().Where(e => gr.Contains(e.ToLite())).Select(e => e.Isolation()).Only()
+                ).NotNull().Only();
+        }
+        
     }
 }

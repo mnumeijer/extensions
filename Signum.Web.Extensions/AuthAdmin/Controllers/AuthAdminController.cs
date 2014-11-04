@@ -38,7 +38,7 @@ namespace Signum.Web.AuthAdmin
         {
             Lite<RoleDN> role = this.ExtractLite<RoleDN>("Role");
 
-            var prp = PermissionAuthLogic.GetPermissionRules(role).ApplyChanges(ControllerContext, true, ""); ;
+            var prp = PermissionAuthLogic.GetPermissionRules(role).ApplyChanges(this, ""); ;
 
             PermissionAuthLogic.SetPermissionRules(prp.Value);
 
@@ -55,7 +55,7 @@ namespace Signum.Web.AuthAdmin
         {
             Lite<RoleDN> role = this.ExtractLite<RoleDN>("Role");
 
-            var prp = TypeAuthLogic.GetTypeRules(role).ApplyChanges(ControllerContext, true, ""); ;
+            var prp = TypeAuthLogic.GetTypeRules(role).ApplyChanges(this, ""); ;
 
             TypeAuthLogic.SetTypeRules(prp.Value);
 
@@ -65,7 +65,7 @@ namespace Signum.Web.AuthAdmin
         [HttpPost]
         public ActionResult Properties(Lite<RoleDN> role, Lite<TypeDN> type)
         {
-            return this.PopupNavigate(PropertyAuthLogic.GetPropertyRules(role.FillToString(), type.Retrieve()));
+            return this.PopupNavigate(PropertyAuthLogic.GetPropertyRules(role.FillToString(), type.Retrieve()), new PopupNavigateOptions(""));
         }
 
         [HttpPost]
@@ -74,12 +74,12 @@ namespace Signum.Web.AuthAdmin
             Lite<RoleDN> role = this.ExtractLite<RoleDN>(TypeContextUtilities.Compose(prefix, "Role"));
             TypeDN type = this.ExtractEntity<TypeDN>(TypeContextUtilities.Compose(prefix, "Type"));
 
-            var prp = PropertyAuthLogic.GetPropertyRules(role, type).ApplyChanges(ControllerContext, true, prefix);
+            var prp = PropertyAuthLogic.GetPropertyRules(role, type).ApplyChanges(this, prefix);
 
             PropertyAuthLogic.SetPropertyRules(prp.Value);
 
             if (prp.HasErrors())
-                return prp.JsonErrors();
+                return prp.ToJsonModelState();
 
             return null;
         }
@@ -87,7 +87,7 @@ namespace Signum.Web.AuthAdmin
         [HttpPost]
         public ActionResult Queries(Lite<RoleDN> role, Lite<TypeDN> type)
         {
-            return this.PopupNavigate(QueryAuthLogic.GetQueryRules(role.FillToString(), type.Retrieve()));
+            return this.PopupNavigate(QueryAuthLogic.GetQueryRules(role.FillToString(), type.Retrieve()), new PopupNavigateOptions(""));
         }
 
         [HttpPost]
@@ -96,10 +96,10 @@ namespace Signum.Web.AuthAdmin
             Lite<RoleDN> role = this.ExtractLite<RoleDN>(TypeContextUtilities.Compose(prefix, "Role"));
             TypeDN type = this.ExtractEntity<TypeDN>(TypeContextUtilities.Compose(prefix, "Type"));
 
-            var querys = QueryAuthLogic.GetQueryRules(role, type).ApplyChanges(ControllerContext, true, prefix);
+            var querys = QueryAuthLogic.GetQueryRules(role, type).ApplyChanges(this, prefix);
 
             if (querys.HasErrors())
-                return querys.JsonErrors();
+                return querys.ToJsonModelState();
 
             QueryAuthLogic.SetQueryRules(querys.Value);
 
@@ -110,7 +110,7 @@ namespace Signum.Web.AuthAdmin
         [HttpPost]
         public ActionResult Operations(Lite<RoleDN> role, Lite<TypeDN> type)
         {
-            return this.PopupNavigate(OperationAuthLogic.GetOperationRules(role.FillToString(), type.Retrieve()));
+            return this.PopupNavigate(OperationAuthLogic.GetOperationRules(role.FillToString(), type.Retrieve()), new PopupNavigateOptions(""));
         }
 
         [HttpPost]
@@ -119,10 +119,10 @@ namespace Signum.Web.AuthAdmin
             Lite<RoleDN> role = this.ExtractLite<RoleDN>(TypeContextUtilities.Compose(prefix, "Role"));
             TypeDN type = this.ExtractEntity<TypeDN>(TypeContextUtilities.Compose(prefix, "Type"));
 
-            var opers = OperationAuthLogic.GetOperationRules(role, type).ApplyChanges(ControllerContext, true, prefix);
+            var opers = OperationAuthLogic.GetOperationRules(role, type).ApplyChanges(this, prefix);
 
             if (opers.HasErrors())
-                return opers.JsonErrors();
+                return opers.ToJsonModelState();
 
             OperationAuthLogic.SetOperationRules(opers.Value);
 

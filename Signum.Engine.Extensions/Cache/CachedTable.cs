@@ -551,7 +551,7 @@ namespace Signum.Engine.Cache
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Load {0}".Formato(GetType().TypeName()));
 
-                    ((SqlConnector)Connector.Current).ExecuteDataReaderDependency(query, OnChange, CacheLogic.ForceOnStart, fr =>
+                    ((SqlConnector)Connector.Current).ExecuteDataReaderOpionalDependency(query, OnChange, fr =>
                     {
                         object obj = rowReader(fr);
                         result[idGetter(obj)] = obj; //Could be repeated joins
@@ -580,6 +580,20 @@ namespace Signum.Engine.Cache
         public string GetToString(int id)
         {
             Interlocked.Increment(ref hits);
+            var origin = rows.Value.TryGetC(id);
+            if (origin == null)
+                throw new EntityNotFoundException(typeof(T), id);
+
+            return toStrGetter(origin);
+        }
+
+        public string TryGetToString(int id)
+        {
+            Interlocked.Increment(ref hits);
+            var origin = rows.Value.TryGetC(id);
+            if (origin == null)
+                return null;
+
             return toStrGetter(rows.Value[id]);
         }
 
@@ -590,6 +604,7 @@ namespace Signum.Engine.Cache
             var origin = rows.Value.TryGetC(entity.Id);
             if (origin == null)
                 throw new EntityNotFoundException(typeof(T), entity.Id);
+
             completer(origin, retriever, entity);
         }
 
@@ -621,9 +636,11 @@ namespace Signum.Engine.Cache
 
         ResetLazy<Dictionary<int, Dictionary<int, object>>> relationalRows;
 
+        static ParameterExpression result = Expression.Parameter(typeof(T));
+
         Func<FieldReader, object> rowReader;
-        Expression<Func<object, IRetriever, T>> activatorExpression;
-        Func<object, IRetriever, T> activator;
+        Expression<Func<object, IRetriever, MList<T>.RowIdValue>> activatorExpression;
+        Func<object, IRetriever, MList<T>.RowIdValue> activator;
         Func<object, int> parentIdGetter;
         Func<object, int> rowIdGetter;
 
@@ -657,11 +674,18 @@ namespace Signum.Engine.Cache
                 List<Expression> instructions = new List<Expression>();
 
                 instructions.Add(Expression.Assign(ctr.origin, Expression.Convert(CachedTableConstructor.originObject, ctr.tupleType)));
-                instructions.Add(ctr.MaterializeField(table.Field));
+                instructions.Add(Expression.Assign(result, ctr.MaterializeField(table.Field)));
 
-                var block = Expression.Block(table.Field.FieldType, new[] { ctr.origin }, instructions);
+                var ci = typeof(MList<T>.RowIdValue).GetConstructor(new []{typeof(T), typeof(int), typeof(int?)});
 
-                activatorExpression = Expression.Lambda<Func<object, IRetriever, T>>(block, CachedTableConstructor.originObject, CachedTableConstructor.retriever);
+                var order = table.Order == null ? Expression.Constant(null, typeof(int?)) : 
+                     ctr.GetTupleProperty(table.Order).Nullify();
+
+                instructions.Add(Expression.New(ci, result, ctr.GetTupleProperty(table.PrimaryKey), order));
+
+                var block = Expression.Block(typeof(MList<T>.RowIdValue), new[] { ctr.origin, result }, instructions);
+
+                activatorExpression = Expression.Lambda<Func<object, IRetriever, MList<T>.RowIdValue>>(block, CachedTableConstructor.originObject, CachedTableConstructor.retriever);
 
                 activator = activatorExpression.Compile();
 
@@ -686,7 +710,7 @@ namespace Signum.Engine.Cache
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Load {0}".Formato(GetType().TypeName()));
 
-                    ((SqlConnector)Connector.Current).ExecuteDataReaderDependency(query, OnChange, CacheLogic.ForceOnStart, fr =>
+                    ((SqlConnector)Connector.Current).ExecuteDataReaderOpionalDependency(query, OnChange, fr =>
                     {
                         object obj = rowReader(fr);
                         int parentId = parentIdGetter(obj);
@@ -728,10 +752,13 @@ namespace Signum.Engine.Cache
             else
             {
                 result = new MList<T>(dic.Count);
+                var innerList = ((IMListPrivate<T>)result).InnerList;
                 foreach (var obj in dic.Values)
                 {
-                    result.Add(activator(obj, retriever));
+                    innerList.Add(activator(obj, retriever));
                 }
+                ((IMListPrivate)result).ExecutePostRetrieving();
+                
             }
 
             CachedTableConstructor.resetModifiedAction(retriever, result);
@@ -814,7 +841,7 @@ namespace Signum.Engine.Cache
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Load {0}".Formato(GetType().TypeName()));
 
-                    ((SqlConnector)Connector.Current).ExecuteDataReaderDependency(query, OnChange, CacheLogic.ForceOnStart, fr =>
+                    ((SqlConnector)Connector.Current).ExecuteDataReaderOpionalDependency(query, OnChange, fr =>
                     {
                         var kvp = rowReader(fr);
                         result[kvp.Key] = kvp.Value;

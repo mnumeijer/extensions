@@ -74,7 +74,7 @@ namespace Signum.Web.Files
 
             HtmlStringBuilder sbg = new HtmlStringBuilder();
 
-            using (sbg.Surround(new HtmlTag("div").Id(fileLine.Prefix).Class("sf-field SF-control-container")))
+            using (sbg.SurroundLine(new HtmlTag("div").Id(fileLine.Prefix).Class("sf-field SF-control-container")))
             {
                 sbg.AddLine(new HtmlTag("link").Attrs(new { rel = "stylesheet", type = "text/css", href = RouteHelper.New().Content("~/Files/Content/Files.css") }).ToHtmlSelf());
 
@@ -85,10 +85,10 @@ namespace Signum.Web.Files
 
                 bool hasEntity = value != null && value.FileName.HasText();
 
-                using (sbg.Surround(new HtmlTag("div", fileLine.Compose("DivOld")).Attr("style", "display:" + (hasEntity ? "block" : "none"))))
+                using (sbg.SurroundLine(new HtmlTag("div", fileLine.Compose("DivOld")).Attr("style", "display:" + (hasEntity ? "block" : "none"))))
                 {
                     HtmlStringBuilder sb = new HtmlStringBuilder();
-                    using (sb.Surround(new HtmlTag("div", fileLine.Compose("inputGroup")).Class("input-group")))
+                    using (sb.SurroundLine(new HtmlTag("div", fileLine.Compose("inputGroup")).Class("input-group")))
                     {
                         if (fileLine.Download != DownloadBehaviour.None)
                         {
@@ -108,7 +108,7 @@ namespace Signum.Web.Files
                         if (fileLine.Type.IsEmbeddedEntity())
                             sb.AddLine(helper.Hidden(fileLine.Compose(EntityBaseKeys.EntityState), value.Try(f => Navigator.Manager.SerializeEntity((ModifiableEntity)f))));
                         
-                        using (sb.Surround(new HtmlTag("span", fileLine.Compose("shownButton")).Class("input-group-btn")))
+                        using (sb.SurroundLine(new HtmlTag("span", fileLine.Compose("shownButton")).Class("input-group-btn")))
                         {
                             sb.AddLine(EntityButtonHelper.Remove(helper, fileLine, btn: true));
                         }
@@ -119,14 +119,14 @@ namespace Signum.Web.Files
                         fileLine.LabelText, sb.ToHtml()));
                 }
 
-                using (sbg.Surround(new HtmlTag("div", fileLine.Compose("DivNew"))
+                using (sbg.SurroundLine(new HtmlTag("div", fileLine.Compose("DivNew"))
                     .Class("sf-file-line-new")
                     .Attr("style", "display:" + (hasEntity ? "none" : "block"))))
                 {
 
                     HtmlStringBuilder sb = new HtmlStringBuilder();
                     sb.AddLine(helper.HiddenRuntimeInfo(fileLine));
-                    sb.AddLine(MvcHtmlString.Create("<input type='file' onchange=\"{0}\" id='{1}' name='{1}' class='form-control'/>".Formato(fileLine.SFControlThen("onChanged()"), fileLine.Compose(FileLineKeys.File))));
+                    sb.AddLine(MvcHtmlString.Create("<input type='file' id='{0}' name='{0}' class='form-control'/>".Formato(fileLine.Compose(FileLineKeys.File))));
                     sb.AddLine(MvcHtmlString.Create("<img src='{0}' id='{1}_loading' alt='loading' style='display:none'/>".Formato(RouteHelper.New().Content("~/Files/Images/loading.gif"), fileLine.Prefix)));
 
 

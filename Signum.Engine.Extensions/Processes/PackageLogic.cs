@@ -104,7 +104,18 @@ namespace Signum.Engine.Processes
 
                     ProcessLogic.Register(PackageOperationProcess.PackageOperation, new PackageOperationAlgorithm());
                 }
+
+                ExceptionLogic.DeleteLogs += ExceptionLogic_DeleteLogs;
             }
+        }
+
+        public static void ExceptionLogic_DeleteLogs(DateTime limit)
+        {
+            var usedDatas = Database.Query<ProcessDN>().Select(a => a.Data);
+
+            Database.Query<PackageLineDN>().Where(line => !usedDatas.Contains(line.Package.Entity)).UnsafeDelete();
+            Database.Query<PackageOperationDN>().Where(po => !usedDatas.Contains(po)).UnsafeDelete();
+            Database.Query<PackageDN>().Where(po => !usedDatas.Contains(po)).UnsafeDelete();
         }
 
         public static PackageDN CreateLines(this PackageDN package, IEnumerable<Lite<IIdentifiable>> lites)
@@ -131,6 +142,19 @@ namespace Signum.Engine.Processes
             return package;
         }
 
+        public static PackageDN CreateLinesQuery<T>(this PackageDN package, IQueryable<T> entities) where T : IdentifiableEntity
+        {
+            package.Save();
+
+            entities.UnsafeInsert(e => new PackageLineDN
+            {
+                Package = package.ToLite(),
+                Target = e,
+            }); 
+
+            return package;
+        }
+
         static readonly GenericInvoker<Func<PackageDN, IEnumerable<Lite<IIdentifiable>>, int>> giInsertPackageLines = new GenericInvoker<Func<PackageDN, IEnumerable<Lite<IIdentifiable>>, int>>(
             (package, lites) => InsertPackageLines<Entity>(package, lites));
         static int InsertPackageLines<T>(PackageDN package, IEnumerable<Lite<IIdentifiable>> lites)
@@ -143,17 +167,18 @@ namespace Signum.Engine.Processes
             }); 
         }
 
-        public static ProcessDN CreatePackageOperation(IEnumerable<Lite<IIdentifiable>> entities, OperationSymbol operation)
+        public static ProcessDN CreatePackageOperation(IEnumerable<Lite<IIdentifiable>> entities, OperationSymbol operation, params object[] operationArgs)
         {
             return ProcessLogic.Create(PackageOperationProcess.PackageOperation, new PackageOperationDN()
             {
-                Operation = operation
+                Operation = operation,
+                OperationArgs = operationArgs,
             }.CreateLines(entities));
         }
 
         public static void RegisterUserTypeCondition(SchemaBuilder sb, TypeConditionSymbol typeCondition)
         {
-            TypeConditionLogic.Register<ProcessDN>(typeCondition,
+            TypeConditionLogic.RegisterCompile<ProcessDN>(typeCondition,
                 pe => pe.Mixin<UserProcessSessionMixin>().User.RefersTo(UserDN.Current));
 
             TypeConditionLogic.Register<PackageOperationDN>(typeCondition,

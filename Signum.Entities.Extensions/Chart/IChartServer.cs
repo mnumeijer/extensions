@@ -22,7 +22,13 @@ namespace Signum.Services
         List<Lite<UserChartDN>> GetUserChartsEntity(Type entityType);
 
         [OperationContract, NetDataContract]
-        List<Lite<UserChartDN>> AutoCompleteUserChart(string subString, int limit);
+        List<Lite<UserChartDN>> AutocompleteUserChart(string subString, int limit);
+
+        [OperationContract, NetDataContract]
+        UserChartDN RetrieveUserChart(Lite<UserChartDN> userChart);
+
+        [OperationContract, NetDataContract]
+        List<ChartScriptDN> GetChartScripts();
     }
 
     [ServiceContract]

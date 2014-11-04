@@ -16,8 +16,6 @@ using Signum.Utilities;
 using Signum.Engine.Basics;
 using Signum.Entities.Chart;
 using Signum.Utilities.DataStructures;
-using Signum.Entities.Reports;
-using Signum.Engine.Reports;
 using Signum.Engine.SMS;
 using Signum.Entities.UserQueries;
 using Signum.Engine.UserQueries;
@@ -30,17 +28,31 @@ using Signum.Engine.Profiler;
 using Signum.Entities.Processes;
 using Signum.Engine.Processes;
 using Signum.Engine.Operations;
-using Signum.Entities.ControlPanel;
-using Signum.Engine.ControlPanel;
+using Signum.Entities.Dashboard;
+using Signum.Engine.Dashboard;
 using Signum.Entities.Scheduler;
+using Signum.Entities.Excel;
+using Signum.Engine.Excel;
+using Signum.Entities.UserAssets;
+using Signum.Engine.UserAssets;
+using Signum.Engine.ViewLog;
+using Signum.Engine.DiffLog;
+using Signum.Entities.Isolation;
+using Signum.Engine.Isolation;
 
 namespace Signum.Services
 {
-    public abstract class ServerExtensions : ServerBasic, ILoginServer, IQueryServer, IProcessServer, IControlPanelServer,
+    public abstract class ServerExtensions : ServerBasic, ILoginServer, IQueryServer, IProcessServer, IDashboardServer,
         IChartServer, IExcelReportServer, IUserQueryServer, IQueryAuthServer, IPropertyAuthServer, IUserAssetsServer,
         ITypeAuthServer, IPermissionAuthServer, IOperationAuthServer, ISmsServer,
-        IProfilerServer
+        IProfilerServer, IDiffLogServer, IIsolationServer
     {
+        public override IdentifiableEntity Retrieve(Type type, int id)
+        {
+            using (ViewLogLogic.LogView(Lite.Create(type, id), "WCFRetrieve"))
+                return base.Retrieve(type, id);
+        }
+
 
         #region ILoginServer Members
         public virtual void Login(string username, string passwordHash)
@@ -83,10 +95,10 @@ namespace Signum.Services
         #endregion
 
         #region IProcessServer
-        public ProcessDN CreatePackageOperation(IEnumerable<Lite<IIdentifiable>> lites, OperationSymbol operationSymbol)
+        public ProcessDN CreatePackageOperation(IEnumerable<Lite<IIdentifiable>> lites, OperationSymbol operationSymbol, params object[] operationArgs)
         {
             return Return(MethodInfo.GetCurrentMethod(), null,
-                () => PackageLogic.CreatePackageOperation(lites, operationSymbol));
+                () => PackageLogic.CreatePackageOperation(lites, operationSymbol, operationArgs));
         }
         #endregion
 
@@ -247,10 +259,22 @@ namespace Signum.Services
             () => UserChartLogic.GetUserChartsEntity(entityType));
         }
 
-        public List<Lite<UserChartDN>> AutoCompleteUserChart(string subString, int limit)
+        public List<Lite<UserChartDN>> AutocompleteUserChart(string subString, int limit)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => ChartLogic.Autocomplete(subString, limit));
+                () => UserChartLogic.Autocomplete(subString, limit));
+        }
+
+        public UserChartDN RetrieveUserChart(Lite<UserChartDN> userChart)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                   () => UserChartLogic.RetrieveUserChart(userChart));
+        }
+
+        public List<ChartScriptDN> GetChartScripts()
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                    () => ChartScriptLogic.Scripts.Value.Values.ToList());
         }
         #endregion
 
@@ -259,19 +283,19 @@ namespace Signum.Services
         public List<Lite<ExcelReportDN>> GetExcelReports(object queryName)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => ReportSpreadsheetsLogic.GetExcelReports(queryName));
+                () => ExcelLogic.GetExcelReports(queryName));
         }
 
         public byte[] ExecuteExcelReport(Lite<ExcelReportDN> excelReport, QueryRequest request)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => ReportSpreadsheetsLogic.ExecuteExcelReport(excelReport, request));
+                () => ExcelLogic.ExecuteExcelReport(excelReport, request));
         }
 
         public byte[] ExecutePlainExcel(QueryRequest request)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => ReportSpreadsheetsLogic.ExecutePlainExcel(request));
+                () => ExcelLogic.ExecutePlainExcel(request));
         }
 
         #endregion
@@ -289,10 +313,16 @@ namespace Signum.Services
             () => UserQueryLogic.GetUserQueriesEntity(entityType));
         }
 
-        public List<Lite<UserQueryDN>> AutoCompleteUserQueries(string subString, int limit)
+        public List<Lite<UserQueryDN>> AutocompleteUserQueries(string subString, int limit)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                   () => UserQueryLogic.Autocomplete(subString, limit));
+        }
+
+        public UserQueryDN RetrieveUserQuery(Lite<UserQueryDN> userQuery)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                 () => UserQueryLogic.RetrieveUserQuery(userQuery));
         }
         #endregion
 
@@ -315,7 +345,7 @@ namespace Signum.Services
                 () => SMSLogic.RegisteredDataObjectProviders());
         }
 
-        public Entities.Translation.CultureInfoDN GetDefaultCulture()
+        public CultureInfoDN GetDefaultCulture()
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => SMSLogic.Configuration.DefaultCulture);
@@ -330,24 +360,43 @@ namespace Signum.Services
         }
         #endregion
 
-        #region IControlPanelServer
-        public ControlPanelDN GetHomePageControlPanel()
+        #region IDashboardServer
+        public DashboardDN GetHomePageDashboard()
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => ControlPanelLogic.GetHomePageControlPanel());
+                () => DashboardLogic.GetHomePageDashboard());
         }
 
-        public List<Lite<ControlPanelDN>> GetControlPanelsEntity(Type entityType)
+        public DashboardDN GetEmbeddedDashboard(Type entityType)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => ControlPanelLogic.GetControlPanelsEntity(entityType));
+                () => DashboardLogic.GetEmbeddedDashboard(entityType));
         }
 
-        public List<Lite<ControlPanelDN>> AutocompleteControlPanel(string subString, int limit)
+        public List<Lite<DashboardDN>> GetDashboardsEntity(Type entityType)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                  () => ControlPanelLogic.Autocomplete(subString, limit));
+                () => DashboardLogic.GetDashboardsEntity(entityType));
         }
+
+        public List<Lite<DashboardDN>> AutocompleteDashboard(string subString, int limit)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                  () => DashboardLogic.Autocomplete(subString, limit));
+        }
+
+        public List<Lite<DashboardDN>> GetDashboards()
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                  () => DashboardLogic.GetDashboards());
+        }
+
+        public DashboardDN RetrieveDashboard(Lite<DashboardDN> dashboard)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                   () => DashboardLogic.RetrieveDashboard(dashboard));
+        }
+
         #endregion
 
         #region IUserAssetsServer
@@ -371,6 +420,18 @@ namespace Signum.Services
         #endregion
 
 
+       public MinMax<OperationLogDN> OperationLogNextPrev(OperationLogDN log)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+              () => DiffLogLogic.OperationLogNextPrev(log));
+        }
 
+         #region IIsolationServer
+        public Lite<IsolationDN> GetOnlyIsolation(List<Lite<IdentifiableEntity>> selectedEntities)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+            () => IsolationLogic.GetOnlyIsolation(selectedEntities));
+        }
+        #endregion
     }
 }

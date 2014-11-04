@@ -1,5 +1,4 @@
-﻿using Signum.Entities.Translation;
-using Signum.Utilities;
+﻿using Signum.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -9,6 +8,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using Signum.Entities.Basics;
 
 namespace Signum.Entities.Mailing
 {
@@ -24,7 +24,7 @@ namespace Signum.Entities.Mailing
             set { SetToStr(ref name, value); }
         }
 
-        [NotifyCollectionChanged]
+        [NotifyCollectionChanged, NotNullable]
         MList<EmailMasterTemplateMessageDN> messages = new MList<EmailMasterTemplateMessageDN>();
         public MList<EmailMasterTemplateMessageDN> Messages
         {
@@ -59,11 +59,13 @@ namespace Signum.Entities.Mailing
         {
             if (sender == messages)
             {
-                foreach (var item in args.OldItems.Cast<EmailMasterTemplateMessageDN>())
-                    item.MasterTemplate = null;
+                if (args.OldItems != null)
+                    foreach (var item in args.OldItems.Cast<EmailMasterTemplateMessageDN>())
+                        item.MasterTemplate = null;
 
-                foreach (var item in args.NewItems.Cast<EmailMasterTemplateMessageDN>())
-                    item.MasterTemplate = this;
+                if (args.NewItems != null)
+                    foreach (var item in args.NewItems.Cast<EmailMasterTemplateMessageDN>())
+                        item.MasterTemplate = this;
             }
         }
 

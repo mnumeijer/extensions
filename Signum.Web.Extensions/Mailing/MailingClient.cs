@@ -24,6 +24,10 @@ using Signum.Entities.UserQueries;
 using Signum.Web.Operations;
 using Signum.Web.UserQueries;
 using System.Text.RegularExpressions;
+using Signum.Entities.UserAssets;
+using Signum.Web.UserAssets;
+using Signum.Web.Basic;
+using Signum.Entities.Processes;
 #endregion
 
 namespace Signum.Web.Mailing
@@ -31,7 +35,7 @@ namespace Signum.Web.Mailing
     public static class MailingClient
     {
         public static string ViewPrefix = "~/Mailing/Views/{0}.cshtml";
-        public static string Module = "Extensions/Signum.Web.Extensions/Mailing/Scripts/Mailing";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Mailing/Scripts/Mailing");
 
         private static QueryTokenDN ParseQueryToken(string tokenString, string queryRuntimeInfoInput)
         {
@@ -42,13 +46,15 @@ namespace Signum.Web.Mailing
             var queryName = QueryLogic.ToQueryName(((Lite<QueryDN>)queryRuntimeInfo.ToLite()).InDB(q => q.Key));
             QueryDescription qd = DynamicQueryManager.Current.QueryDescription(queryName);
 
-            return new QueryTokenDN(QueryUtils.Parse(tokenString, qd, canAggregate: false));
+            return new QueryTokenDN(QueryUtils.Parse(tokenString, qd, SubTokensOptions.CanElement));
         }
 
         public static void Start(bool newsletter, bool pop3Config)
         {
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
+                CultureInfoClient.Start();
+
                 Navigator.RegisterArea(typeof(MailingClient));
                 Navigator.AddSettings(new List<EntitySettings>
                 {
@@ -91,7 +97,7 @@ namespace Signum.Web.Mailing
                         MappingDefault = new EntityMapping<EmailTemplateContactDN>(true)
                             .SetProperty(ec => ec.Token, ctx =>
                             {
-                                string tokenStr = UserQueriesHelper.GetTokenString(ctx);
+                                string tokenStr = UserAssetsHelper.GetTokenString(ctx);
                                 return ParseQueryToken(tokenStr, ctx.Parent.Parent.Parent.Inputs[TypeContextUtilities.Compose("Query", EntityBaseKeys.RuntimeInfo)]);
                             }),
                     },
@@ -102,7 +108,7 @@ namespace Signum.Web.Mailing
                         MappingDefault = new EntityMapping<EmailTemplateRecipientDN>(true)
                             .SetProperty(ec => ec.Token, ctx =>
                             {
-                                string tokenStr = UserQueriesHelper.GetTokenString(ctx);
+                                string tokenStr = UserAssetsHelper.GetTokenString(ctx);
 
                                 return ParseQueryToken(tokenStr, ctx.Parent.Parent.Parent.Parent.Inputs[TypeContextUtilities.Compose("Query", EntityBaseKeys.RuntimeInfo)]);
                             })
@@ -114,10 +120,10 @@ namespace Signum.Web.Mailing
 
                 OperationClient.AddSettings(new List<OperationSettings>
                 {
-                    new EntityOperationSettings(EmailMessageOperation.CreateMailFromTemplate)
+                    new EntityOperationSettings<EmailTemplateDN>(EmailMessageOperation.CreateMailFromTemplate)
                     {
                         Group = EntityOperationGroup.None,
-                        OnClick = ctx => new JsOperationFunction(Module, "createMailFromTemplate",
+                        Click = ctx => Module["createMailFromTemplate"](ctx.Options(), JsFunction.Event, 
                             new FindOptions(((EmailTemplateDN)ctx.Entity).Query.ToQueryName()).ToJS(ctx.Prefix, "New"), 
                             ctx.Url.Action((MailingController mc)=>mc.CreateMailFromTemplateAndEntity()))
                     }
@@ -133,14 +139,14 @@ namespace Signum.Web.Mailing
 
                     OperationClient.AddSettings(new List<OperationSettings>
                     {
-                        new EntityOperationSettings(NewsletterOperation.RemoveRecipients)
+                        new EntityOperationSettings<NewsletterDN>(NewsletterOperation.RemoveRecipients)
                         {
-                            OnClick = ctx =>new JsOperationFunction(Module, "removeRecipients",
+                            Click = ctx => Module["removeRecipients"](ctx.Options(),
                                 new FindOptions(typeof(NewsletterDeliveryDN), "Newsletter", ctx.Entity).ToJS(ctx.Prefix, "New"),
                                 ctx.Url.Action((MailingController mc)=>mc.RemoveRecipientsExecute()))
                         },
 
-                        new EntityOperationSettings(NewsletterOperation.Send)
+                        new EntityOperationSettings<NewsletterDN>(NewsletterOperation.Send)
                         {
                             Group = EntityOperationGroup.None,
                         }
@@ -177,14 +183,12 @@ namespace Signum.Web.Mailing
             }
         }
 
-        public static QueryTokenBuilderSettings GetQueryTokenBuilderSettings(QueryDescription qd)
+        public static QueryTokenBuilderSettings GetQueryTokenBuilderSettings(QueryDescription qd, SubTokensOptions options)
         {
-            return new QueryTokenBuilderSettings
+            return new QueryTokenBuilderSettings(qd, options)
             {
-                CanAggregate = false,
                 ControllerUrl = RouteHelper.New().Action("NewSubTokensCombo", "Mailing"),
                 Decorators = MailingDecorators,
-                QueryDescription = qd,
                 RequestExtraJSonData = null,
             };
         }
@@ -253,8 +257,8 @@ namespace Signum.Web.Mailing
             if (body == null)
                 return null;
 
-            foreach (var item in TasksSetWebMailBody.GetInvocationList().Cast<Func<string, WebMailOptions, string>>())
-                body = item(body, options); 
+            foreach (var f in TasksSetWebMailBody.GetInvocationListTyped())
+                body = f(body, options); 
 
             return body;
         }
@@ -265,8 +269,8 @@ namespace Signum.Web.Mailing
             if (body == null)
                 return null;
 
-            foreach (var item in TasksGetWebMailBody.GetInvocationList().Cast<Func<string, WebMailOptions, string>>())
-                body = item(body, options);
+            foreach (var f in TasksGetWebMailBody.GetInvocationListTyped())
+                body = f(body, options);
 
             return body;
         }

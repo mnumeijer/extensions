@@ -16,7 +16,6 @@ using System.Reflection;
 using System.Collections;
 using System.Collections.Specialized;
 using System.IO;
-using Signum.Entities.Reports;
 using Signum.Entities.Basics;
 using Signum.Engine.Basics;
 using Signum.Entities.Authorization;
@@ -25,6 +24,7 @@ using Signum.Engine.UserQueries;
 using Signum.Engine.Operations;
 using Signum.Engine.Authorization;
 using Signum.Web.Operations;
+using Signum.Entities.UserAssets;
 #endregion
 
 namespace Signum.Web.UserQueries
@@ -32,29 +32,25 @@ namespace Signum.Web.UserQueries
     public class UserQueriesController : Controller
     {
         public ActionResult View(Lite<UserQueryDN> lite, FindOptions findOptions, Lite<IdentifiableEntity> currentEntity)
-        {   
-            UserQueryPermission.ViewUserQuery.Authorize(); 
+        {
+            UserQueryPermission.ViewUserQuery.Authorize();
 
-            UserQueryDN uq = Database.Retrieve<UserQueryDN>(lite);
+            UserQueryDN uq =  UserQueryLogic.RetrieveUserQuery(lite);
 
-            if (uq.EntityType != null)
-                CurrentEntityConverter.SetFilterValues(uq.Filters, currentEntity.Retrieve());
-
-            if (findOptions == null)
+            using (uq.EntityType == null ? null : CurrentEntityConverter.SetCurrentEntity(currentEntity.Retrieve()))
             {
-                findOptions = uq.ToFindOptions();
-                return Navigator.Find(this, findOptions);
+                if (findOptions == null)
+                    findOptions = uq.ToFindOptions();
+                else
+                    findOptions.ApplyUserQuery(uq);
             }
-            else
-            {
-                findOptions.ApplyUserQuery(uq);
-                return Navigator.Find(this, findOptions);
-            }
+
+            return Finder.SearchPage(this, findOptions);
         }
 
         public ActionResult Create(QueryRequest request)
         {
-            if (!Navigator.IsFindable(request.QueryName))
+            if (!Finder.IsFindable(request.QueryName))
                 throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().Formato(request.QueryName));
 
             var userQuery = ToUserQuery(request);
@@ -71,27 +67,6 @@ namespace Signum.Web.UserQueries
                 QueryLogic.GetQuery(request.QueryName),
                 FindOptions.DefaultPagination,
                 withoutFilters: false /*Implement Simple Filter Builder*/);
-        }
-
-        [HttpPost]
-        public ActionResult Save()
-        {
-            UserQueryDN userQuery = null;
-            
-            try
-            {
-                userQuery = this.ExtractEntity<UserQueryDN>();
-            }
-            catch(Exception){}
-
-            var context = userQuery.ApplyChanges(this.ControllerContext, true).ValidateGlobal();
-
-            if (context.HasErrors())
-                return context.JsonErrors();
-
-            userQuery = context.Value.Execute(UserQueryOperation.Save);
-
-            return this.DefaultExecuteResult(userQuery);
         }
     }
 }

@@ -14,7 +14,7 @@ namespace Signum.Web.Notes
     {
         public static int CountNotes(Lite<IdentifiableEntity> identifiable)
         { 
-            return Navigator.QueryCount(new CountOptions(typeof(NoteDN))
+            return Finder.QueryCount(new CountOptions(typeof(NoteDN))
             {
                 FilterOptions = { new FilterOption("Target", identifiable) }
             });
@@ -41,17 +41,17 @@ namespace Signum.Web.Notes
 
             List<IMenuItem> items = new List<IMenuItem>()
             {
-                new MenuItem
+                new MenuItem(ctx.Prefix, "sfNoteView")
                 {
                      CssClass = "sf-note-view",
-                     OnClick = new JsFunction(NoteClient.Module, "explore", ctx.Prefix, findOptions, url),
+                     OnClick = NoteClient.Module["explore"](ctx.Prefix, findOptions, url),
                      Text = NoteMessage.ViewNotes.NiceToString(),
                 },
 
-                new MenuItem
+                new MenuItem(ctx.Prefix, "sfNoteCreate")
                 {
                     CssClass = "sf-note-create",
-                    OnClick = new JsFunction(NoteClient.Module, "createNote", ctx.Prefix, NoteOperation.CreateNoteFromEntity.Operation.Key, url),
+                    OnClick = NoteClient.Module["createNote"](JsFunction.Event, ctx.Prefix, NoteOperation.CreateNoteFromEntity.Symbol.Key, url),
                     Text = NoteMessage.CreateNote.NiceToString()
                 },
             }; 

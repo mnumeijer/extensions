@@ -41,15 +41,6 @@ namespace Signum.Engine.Authorization
             return new Disposable(() => saveDisabled.Value = false);
         }
 
-        static IQueryable<T> TypeAuthLogic_FilterQuery<T>(IQueryable<T> query)
-            where T : IdentifiableEntity
-        {
-            if (!queryFilterDisabled.Value)
-                return WhereAllowed<T>(query);
-            return query;
-        }
-
-
         const string CreatedKey = "Created";
         const string ModifiedKey = "Modified";
 
@@ -161,7 +152,7 @@ namespace Signum.Engine.Authorization
                     List<DebugData> debugInfo = Database.Query<T>().Where(a => notFound.Contains(a.Id))
                         .Select(a => a.IsAllowedForDebug(typeAllowed, ExecutionMode.InUserInterface)).ToList();
 
-                    string details = debugInfo.ToString(a => "  {0} because {1}".Formato(a.Lite, a.Error), "\r\n");
+                    string details = debugInfo.ToString(a => "  '{0}'  because {1}".Formato(a.Lite, a.Error), "\r\n");
 
                     throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().Formato(
                         typeAllowed.NiceToString(),
@@ -231,8 +222,31 @@ namespace Signum.Engine.Authorization
             if (max < allowed)
                 return false;
 
+            var inMemoryCodition = IsAllowedInMemory<T>(tac, allowed, inUserInterface);
+            if (inMemoryCodition != null)
+                return inMemoryCodition(entity);
+         
             using (DisableQueryFilter())
                 return entity.InDB().WhereIsAllowedFor(allowed, inUserInterface).Any();
+        }
+
+        private static Func<T, bool> IsAllowedInMemory<T>(TypeAllowedAndConditions tac, TypeAllowedBasic allowed, bool inUserInterface) where T : IdentifiableEntity
+        {
+            if (tac.Conditions.Any(c => TypeConditionLogic.GetInMemoryCondition<T>(c.TypeCondition) == null))
+                return null;
+
+            return entity =>
+            {
+                foreach (var cond in tac.Conditions.Reverse())
+                {
+                    var func = TypeConditionLogic.GetInMemoryCondition<T>(cond.TypeCondition);
+
+                    if (func(entity))
+                        return cond.Allowed.Get(inUserInterface) >= allowed;
+                }
+
+                return tac.Fallback.Get(inUserInterface) >= allowed;
+            }; 
         }
 
         [MethodExpander(typeof(IsAllowedForExpander))]
@@ -270,7 +284,7 @@ namespace Signum.Engine.Authorization
 
                 Expression exp = arguments[0].Type.IsLite() ? Expression.Property(arguments[0], "Entity") : arguments[0];
 
-                return IsAllowedExpression(exp, allowed, inUserInterface) ?? Expression.Constant(true);
+                return IsAllowedExpression(exp, allowed, inUserInterface);
             }
         }
 
@@ -330,6 +344,35 @@ namespace Signum.Engine.Authorization
         }
 
 
+        static FilterQueryResult<T> TypeAuthLogic_FilterQuery<T>() 
+          where T : IdentifiableEntity
+        {
+            if (queryFilterDisabled.Value)
+                return null;
+
+            if (ExecutionMode.InGlobal || !AuthLogic.IsEnabled)
+                return null;
+
+            var ui = ExecutionMode.InUserInterface;
+            AssertMinimum<T>(ui);
+
+            ParameterExpression e = Expression.Parameter(typeof(T), "e");
+
+            Expression body = IsAllowedExpression(e, TypeAllowedBasic.Read, ui);
+
+            var ce = body as ConstantExpression;
+            if (ce != null)
+            {
+                if (((bool)ce.Value))
+                    return null;
+            }
+
+            Func<T, bool> func = IsAllowedInMemory<T>(GetAllowed(typeof(T)), TypeAllowedBasic.Read, ui);
+
+            return new FilterQueryResult<T>(Expression.Lambda<Func<T, bool>>(body, e), func);
+        }
+
+
         [MethodExpander(typeof(WhereAllowedExpander))]
         public static IQueryable<T> WhereAllowed<T>(this IQueryable<T> query)
             where T : IdentifiableEntity
@@ -339,14 +382,19 @@ namespace Signum.Engine.Authorization
 
             var ui = ExecutionMode.InUserInterface;
 
+            AssertMinimum<T>(ui);
+
+            return WhereIsAllowedFor<T>(query, TypeAllowedBasic.Read, ui);
+        }
+
+        private static void AssertMinimum<T>(bool ui) where T : IdentifiableEntity
+        {
             var allowed = GetAllowed(typeof(T));
-            var max = ui ?  allowed.MaxUI(): allowed.MaxDB();
+            var max = ui ? allowed.MaxUI() : allowed.MaxDB();
             if (max < TypeAllowedBasic.Read)
                 throw new UnauthorizedAccessException("Type {0} is not authorized{1}{2}".Formato(typeof(T).Name,
                     ui ? " in user interface" : null,
                     allowed.Conditions.Any() ? " for any condition" : null));
-
-            return WhereIsAllowedFor<T>(query, TypeAllowedBasic.Read, ui);
         }
 
 
@@ -419,7 +467,7 @@ namespace Signum.Engine.Authorization
 
             var expression = tac.Conditions.Aggregate(baseValue, (acum, tacRule) =>
             {
-                var lambda = TypeConditionLogic.GetExpression(type, tacRule.TypeCondition);
+                var lambda = TypeConditionLogic.GetCondition(type, tacRule.TypeCondition);
 
                 var exp = (Expression)Expression.Invoke(lambda, entity);
 
@@ -447,7 +495,7 @@ namespace Signum.Engine.Authorization
 
             var list = (from line in tac.Conditions
                         select Expression.New(ciGroupDebugData, Expression.Constant(line.TypeCondition, typeof(TypeConditionSymbol)),
-                        Expression.Invoke(TypeConditionLogic.GetExpression(type, line.TypeCondition), entity),
+                        Expression.Invoke(TypeConditionLogic.GetCondition(type, line.TypeCondition), entity),
                         Expression.Constant(line.Allowed))).ToArray();
 
             Expression newList = Expression.ListInit(Expression.New(typeof(List<ConditionDebugData>)), list);

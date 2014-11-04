@@ -1,6 +1,6 @@
 ﻿/// <reference path="../../../../Framework/Signum.Web/Signum/Scripts/globals.ts"/>
 define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Navigator", "Framework/Signum.Web/Signum/Scripts/Operations"], function(require, exports, Navigator, Operations) {
-    function initControlPanel(url) {
+    function initDashboard(url) {
         var refreshCallback = function () {
             $.get(url, function (data) {
                 $("div.processMainDiv").replaceWith(data);
@@ -34,7 +34,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Navigator", "
             });
         });
     }
-    exports.initControlPanel = initControlPanel;
+    exports.initDashboard = initDashboard;
 
     function refreshPage(prefix) {
         setTimeout(function () {
@@ -57,10 +57,10 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Navigator", "
     }
     exports.refreshProgress = refreshProgress;
 
-    function processFromMany(options) {
+    function processFromMany(options, event) {
         options.controllerUrl = SF.Urls.processFromMany;
 
-        return Operations.constructFromManyDefault(options);
+        return Operations.constructFromManyDefault(options, event);
     }
     exports.processFromMany = processFromMany;
 });

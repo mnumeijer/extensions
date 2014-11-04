@@ -18,7 +18,7 @@ namespace Signum.Windows.UserQueries
     {
         public override OmniboxResultGenerator<UserQueryOmniboxResult> CreateGenerator()
         {
-            return new UserQueryOmniboxResultGenerator((subString, limit) => Server.Return((IUserQueryServer s) => s.AutoCompleteUserQueries(subString, limit)));
+            return new UserQueryOmniboxResultGenerator((subString, limit) => Server.Return((IUserQueryServer s) => s.AutocompleteUserQueries(subString, limit)));
         }
 
         public override void RenderLines(UserQueryOmniboxResult result, InlineCollection lines)
@@ -37,7 +37,7 @@ namespace Signum.Windows.UserQueries
 
             var query = QueryClient.GetQueryName(uq.Query.Key);
 
-            Navigator.Explore(new ExploreOptions(query)
+            Finder.Explore(new ExploreOptions(query)
             {
                 InitializeSearchControl = sc => UserQueryClient.SetUserQuery(sc, uq)
             });

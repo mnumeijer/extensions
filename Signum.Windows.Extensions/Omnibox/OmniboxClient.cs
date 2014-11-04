@@ -86,7 +86,7 @@ namespace Signum.Windows.Omnibox
     {
         public override bool AllowedType(Type type)
         {
-            return Navigator.IsNavigable(type, isSearchEntity: true);
+            return Navigator.IsNavigable(type, isSearch: true);
         }
 
         public override bool AllowedPermission(PermissionSymbol permission)
@@ -96,7 +96,7 @@ namespace Signum.Windows.Omnibox
 
         public override bool AllowedQuery(object queryName)
         {
-            return Navigator.IsFindable(queryName);
+            return Finder.IsFindable(queryName);
         }
 
 

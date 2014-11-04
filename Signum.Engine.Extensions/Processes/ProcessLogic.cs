@@ -112,7 +112,6 @@ namespace Signum.Engine.Processes
                 SymbolLogic<ProcessAlgorithmSymbol>.Start(sb, () => registeredProcesses.Keys.ToHashSet());
 
                 OperationLogic.AssertStarted(sb);
-                CacheLogic.AssertStarted(sb); 
 
                 ProcessGraph.Register();
 
@@ -166,32 +165,43 @@ namespace Signum.Engine.Processes
 
                 if (userProcessSession)
                 {
-                    PropertyAuthLogic.AvoidAutomaticUpgrade.Add(PropertyRoute.Construct((ProcessDN p) => p.Mixin<UserProcessSessionMixin>().User));
+                    PropertyAuthLogic.AvoidAutomaticUpgradeCollection.Add(PropertyRoute.Construct((ProcessDN p) => p.Mixin<UserProcessSessionMixin>().User));
                     MixinDeclarations.AssertDeclared(typeof(ProcessDN), typeof(UserProcessSessionMixin));
                     ApplySession += process =>
                     {
-						var user = process.Mixin<UserProcessSessionMixin>().User; 
+                        var user = process.Mixin<UserProcessSessionMixin>().User;
 
-                        if (user == null)
-                             UserHolder.Current = user.Retrieve();
-  					  
-  					    return null; 
+                        if (user != null)
+                            using (ExecutionMode.Global())
+                                UserHolder.Current = user.Retrieve();
+
+                        return null;
                     };
                 }
+
+                ExceptionLogic.DeleteLogs += ExceptionLogic_DeleteLogs;
             }
+        }
+
+        public static void ExceptionLogic_DeleteLogs(DateTime limit)
+        {
+            Remove(ProcessState.Canceled, limit);
+            Remove(ProcessState.Finished, limit);
+            Remove(ProcessState.Error, limit);
+        }
+
+        private static void Remove(ProcessState processState, DateTime limit)
+        {
+            var query = Database.Query<ProcessDN>().Where(p => p.State == ProcessState.Canceled && p.CreationDate < limit);
+
+            query.SelectMany(a=>a.ExceptionLines()).UnsafeDelete();
+
+            query.UnsafeDelete();
         }
 
         public static IDisposable OnApplySession(ProcessDN process)
         {
-            if (ApplySession == null) 
-                return null;
-
-            IDisposable result = null;
-            foreach (Func<ProcessDN, IDisposable> item in ApplySession.GetInvocationList())
-            {
-                result = Disposable.Combine(result, item(process));
-            }
-            return result;
+            return Disposable.Combine(ApplySession, f => f(process));
         }
 
         public static void Register(ProcessAlgorithmSymbol processAlgorthm, IProcessAlgorithm logic)
@@ -277,21 +287,28 @@ namespace Signum.Engine.Processes
                 {
                     CanConstruct = p => p.State.InState(ProcessState.Error, ProcessState.Canceled, ProcessState.Finished, ProcessState.Suspended),
                     ToState = ProcessState.Created,
-                    Construct = (p, _) => p.Algorithm.Create(p.Data).CopyMixinsFrom(p)
+                    Construct = (p, _) => p.Algorithm.Create(p.Data, p)
                 }.Register();
             }
         }
 
-        public static ProcessDN Create(this ProcessAlgorithmSymbol process, IProcessDataDN processData)
+        public static ProcessDN Create(this ProcessAlgorithmSymbol process, IProcessDataDN processData, IdentifiableEntity copyMixinsFrom = null)
         {
             using (OperationLogic.AllowSave<ProcessDN>())
-                return new ProcessDN(process)
+            {
+                var result = new ProcessDN(process)
                 {
                     State = ProcessState.Created,
                     Data = processData,
                     MachineName = JustMyProcesses ? Environment.MachineName : ProcessDN.None,
                     ApplicationName = JustMyProcesses ? Schema.Current.ApplicationName : ProcessDN.None,
-                }.Save();
+                };
+                
+                if(copyMixinsFrom != null)
+                    process.CopyMixinsFrom(copyMixinsFrom);
+
+                return result.Save();
+            }
         }
 
         public static void ExecuteTest(this ProcessDN p)

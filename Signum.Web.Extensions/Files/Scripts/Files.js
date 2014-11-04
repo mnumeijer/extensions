@@ -30,6 +30,10 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
                 FileLine.initDragDrop(this.prefix.child("DivNew").get(), function (e) {
                     return _this.fileDropped(e);
                 });
+
+            this.prefix.child("sfFile").get().on("change", function (ev) {
+                return _this.onChanged(ev);
+            });
         };
 
         FileLine.initDragDrop = function ($div, onDropped) {
@@ -68,6 +72,16 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
             xhr.setRequestHeader("X-" + this.options.prefix.child(Entities.Keys.runtimeInfo), Entities.RuntimeInfo.getFromPrefix(this.options.prefix).toString());
             xhr.setRequestHeader("X-sfFileType", this.options.fileType);
             xhr.setRequestHeader("X-sfTabId", $("#sfTabId").val());
+
+            var extraParams = {};
+            SF.addAjaxExtraParameters(extraParams);
+            if (extraParams != {}) {
+                for (var key in extraParams) {
+                    if (extraParams.hasOwnProperty(key)) {
+                        xhr.setRequestHeader(key, extraParams[key]);
+                    }
+                }
+            }
 
             var self = this;
             xhr.onload = function (e) {
@@ -121,6 +135,16 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
 
             $("<input type='hidden' name='" + this.options.prefix + "_sfFileType' value='" + this.options.fileType + "'/>").appendTo($fileForm);
 
+            var extraParams = {};
+            SF.addAjaxExtraParameters(extraParams);
+            if (extraParams != {}) {
+                for (var key in extraParams) {
+                    if (extraParams.hasOwnProperty(key)) {
+                        $("<input type='hidden' />").attr("name", key).val(extraParams[key]).appendTo($fileForm);
+                    }
+                }
+            }
+
             var $tabId = $("#" + Entities.Keys.tabId).clone().appendTo($fileForm);
             var $antiForgeryToken = $("input[name=" + Entities.Keys.antiForgeryToken + "]").clone().appendTo($fileForm);
 
@@ -134,6 +158,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
 
         FileLine.prototype.setEntitySpecific = function (entityValue, itemPrefix) {
             this.prefix.child(Entities.Keys.loading).get().hide();
+            this.prefix.child("sfFile").get().val("");
             if (entityValue) {
                 this.prefix.child(Entities.Keys.toStr).tryGet().html(entityValue.toStr);
                 this.prefix.child(Entities.Keys.link).tryGet().html(entityValue.toStr).attr("href", entityValue.link);
@@ -142,19 +167,19 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
                     this.prefix.child(Entities.Keys.link).tryGet().attr("download", entityValue.toStr);
             } else {
                 this.prefix.child(Entities.Keys.toStr).tryGet().html("");
-                this.prefix.child(Entities.Keys.toStr).tryGet().html("").removeAttr("download").removeAttr("href");
+                this.prefix.child(Entities.Keys.link).tryGet().html("").removeAttr("download").removeAttr("href");
             }
         };
 
         FileLine.prototype.onUploaded = function (fileName, link, runtimeInfo, entityState) {
             this.setEntity(new Entities.EntityValue(Entities.RuntimeInfo.parse(runtimeInfo), fileName, link));
 
-            this.prefix.child(Entities.Keys.entityState).get().val(entityState);
+            this.prefix.child(Entities.Keys.entityState).tryGet().val(entityState);
 
-            this.prefix.child("frame").get().remove();
+            this.prefix.child("frame").tryGet().remove();
         };
 
-        FileLine.prototype.onChanged = function () {
+        FileLine.prototype.onChanged = function (e) {
             if (this.options.asyncUpload) {
                 this.upload();
             } else {
@@ -168,11 +193,11 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
             this.prefix.child('DivOld').get().toggle(hasEntity);
             this.prefix.child('DivNew').get().toggle(!hasEntity);
 
-            this.prefix.child("btnRemove").get().toggle(hasEntity);
+            this.prefix.child("btnRemove").tryGet().toggle(hasEntity);
         };
 
         FileLine.prototype.getLink = function (itemPrefix) {
-            return this.prefix.child(Entities.Keys.link).get().attr("href");
+            return this.prefix.child(Entities.Keys.link).get().attr("href") || null;
         };
 
         FileLine.prototype.getToString = function (itemPrefix) {

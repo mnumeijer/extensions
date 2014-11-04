@@ -18,7 +18,7 @@ namespace Signum.Web.Omnibox
 {
     public static class OmniboxClient
     {
-        public static string Module = "Extensions/Signum.Web.Extensions/Omnibox/Scripts/Omnibox";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Omnibox/Scripts/Omnibox");
         static Dictionary<Type, OmniboxProviderBase> Providers = new Dictionary<Type, OmniboxProviderBase>();
 
         public static void Start()
@@ -47,7 +47,7 @@ namespace Signum.Web.Omnibox
                 if (helpResult.OmniboxResultType != null)
                 {
                     var icon = Providers[helpResult.OmniboxResultType].Icon();
-                    innerHtml = innerHtml.Concat(icon);
+                    innerHtml = icon.Concat(innerHtml);
                 }
 
                 return new HtmlTag("span").InnerHtml(innerHtml)
@@ -84,12 +84,21 @@ namespace Signum.Web.Omnibox
 
             public abstract MvcHtmlString RenderHtmlUntyped(OmniboxResult result);
             public abstract string GetUrlUntyped(OmniboxResult result);
-            
+
             public MvcHtmlString ColoredSpan(string text, string colorName)
-            { 
+            {
                 return new HtmlTag("span")
                     .InnerHtml(new MvcHtmlString(text))
-                    .Attr("style", "color:{0}; padding: .2em .4em; line-height: 1.6em;".Formato(colorName)).ToHtml(); 
+                    .Attr("style", "color:{0}; padding: .2em .4em; line-height: 1.6em;".Formato(colorName)).ToHtml();
+            }
+
+            public MvcHtmlString ColoredGlyphicon(string icon, string colorName)
+            {
+                return new HtmlTag("span")
+                    .Class("glyphicon")
+                    .Class(icon)
+                    .Attr("style", "color:{0}".Formato(colorName))
+                    .ToHtml();
             }
         }
 
@@ -114,7 +123,7 @@ namespace Signum.Web.Omnibox
         {
             public override bool AllowedType(Type type)
             {
-                return Navigator.IsNavigable(type, null, isSearchEntity: true);
+                return Navigator.IsNavigable(type, null, isSearch: true);
             }
 
             public override bool AllowedPermission(PermissionSymbol permission)
@@ -124,7 +133,7 @@ namespace Signum.Web.Omnibox
 
             public override bool AllowedQuery(object queryName)
             {
-                return Navigator.IsFindable(queryName);
+                return Finder.IsFindable(queryName);
             }
 
             public override Lite<IdentifiableEntity> RetrieveLite(Type type, int id)

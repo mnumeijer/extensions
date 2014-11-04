@@ -11,15 +11,22 @@ using Signum.Entities;
 using Signum.Entities.DynamicQuery;
 using Signum.Entities.Authorization;
 using Signum.Engine.Authorization;
-using Signum.Entities.Reports;
 using Signum.Entities.Basics;
 using Signum.Engine.Operations;
 using Signum.Utilities;
+using Signum.Engine.UserAssets;
+using Signum.Entities.UserAssets;
+using Signum.Engine.ViewLog;
+using Signum.Engine.Exceptions;
 
 namespace Signum.Engine.UserQueries
 {
     public static class UserQueryLogic
     {
+        public static ResetLazy<Dictionary<Lite<UserQueryDN>, UserQueryDN>> UserQueries;
+        public static ResetLazy<Dictionary<Type, List<Lite<UserQueryDN>>>> UserQueriesByType;
+        public static ResetLazy<Dictionary<object, List<Lite<UserQueryDN>>>> UserQueriesByQuery;
+
         public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
@@ -59,12 +66,18 @@ namespace Signum.Engine.UserQueries
                     Lite = true,
                     Delete = (uq, _) => uq.Delete()
                 }.Register();
+
+                UserQueries = sb.GlobalLazy(() => Database.Query<UserQueryDN>().ToDictionary(a => a.ToLite()),
+                    new InvalidateWith(typeof(UserQueryDN)));
+
+                UserQueriesByQuery = sb.GlobalLazy(() => UserQueries.Value.Values.Where(a => a.EntityType == null).GroupToDictionary(a => a.Query.ToQueryName(), a => a.ToLite()),
+                    new InvalidateWith(typeof(UserQueryDN)));
+
+                UserQueriesByType = sb.GlobalLazy(() => UserQueries.Value.Values.Where(a => a.EntityType != null).GroupToDictionary(a => TypeLogic.IdToType.GetOrThrow(a.EntityType.Id), a => a.ToLite()),
+                    new InvalidateWith(typeof(UserQueryDN)));
             }
         }
 
-
-      
-   
         public static UserQueryDN ParseAndSave(this UserQueryDN userQuery)
         {
             if (!userQuery.IsNew || userQuery.queryName == null)
@@ -90,23 +103,47 @@ namespace Signum.Engine.UserQueries
 
         public static List<Lite<UserQueryDN>> GetUserQueries(object queryName)
         {
-            return (from er in Database.Query<UserQueryDN>()
-                    where er.Query.Key == QueryUtils.GetQueryUniqueKey(queryName) && er.EntityType == null
-                    select er.ToLite()).ToList();
+            var isAllowed = Schema.Current.GetInMemoryFilter<UserQueryDN>(userInterface: true);
+
+            return UserQueriesByQuery.Value.TryGetC(queryName).EmptyIfNull()
+                .Where(e => isAllowed(UserQueries.Value.GetOrThrow(e))).ToList();
         }
 
         public static List<Lite<UserQueryDN>> GetUserQueriesEntity(Type entityType)
         {
-            return (from er in Database.Query<UserQueryDN>()
-                    where er.EntityType == entityType.ToTypeDN().ToLite()
-                    select er.ToLite()).ToList();
+            var isAllowed = Schema.Current.GetInMemoryFilter<UserQueryDN>(userInterface: true);
+
+            return UserQueriesByType.Value.TryGetC(entityType).EmptyIfNull()
+                .Where(e => isAllowed(UserQueries.Value.GetOrThrow(e))).ToList();
+        }
+
+        public static List<Lite<UserQueryDN>> Autocomplete(string subString, int limit)
+        {
+            var isAllowed = Schema.Current.GetInMemoryFilter<UserQueryDN>(userInterface: true);
+
+            return UserQueries.Value.Where(a => a.Value.EntityType == null && isAllowed(a.Value))
+                .Select(a => a.Key).Autocomplete(subString, limit).ToList();
+        }
+
+        public static UserQueryDN RetrieveUserQuery(this Lite<UserQueryDN> userQuery)
+        {
+            using (ViewLogLogic.LogView(userQuery, "UserQuery"))
+            {
+                var result = UserQueries.Value.GetOrThrow(userQuery);
+
+                var isAllowed = Schema.Current.GetInMemoryFilter<UserQueryDN>(userInterface: true);
+                if (!isAllowed(result))
+                    throw new EntityNotFoundException(userQuery.EntityType, userQuery.Id);
+
+                return result;
+            }
         }
 
         public static void RegisterUserTypeCondition(SchemaBuilder sb, TypeConditionSymbol typeCondition)
         {
             sb.Schema.Settings.AssertImplementedBy((UserQueryDN uq) => uq.Owner, typeof(UserDN));
 
-            TypeConditionLogic.Register<UserQueryDN>(typeCondition,
+            TypeConditionLogic.RegisterCompile<UserQueryDN>(typeCondition,
                 uq => uq.Owner.RefersTo(UserDN.Current));
         }
 
@@ -114,14 +151,10 @@ namespace Signum.Engine.UserQueries
         {
             sb.Schema.Settings.AssertImplementedBy((UserQueryDN uq) => uq.Owner, typeof(RoleDN));
 
-            TypeConditionLogic.Register<UserQueryDN>(typeCondition,
+            TypeConditionLogic.RegisterCompile<UserQueryDN>(typeCondition,
                 uq => AuthLogic.CurrentRoles().Contains(uq.Owner));
         }
 
-        public static List<Lite<UserQueryDN>> Autocomplete(string subString, int limit)
-        {
-            return Database.Query<UserQueryDN>().Where(uq => uq.EntityType == null).Autocomplete(subString, limit);
-        }
 
         static SqlPreCommand Schema_Synchronizing(Replacements replacements)
         {
@@ -159,7 +192,7 @@ namespace Signum.Engine.UserQueries
                         foreach (var item in uq.Filters.ToList())
                         {
                             QueryTokenDN token = item.Token;
-                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, false, "{0} {1}".Formato(item.Operation, item.ValueString)))
+                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement, "{0} {1}".Formato(item.Operation, item.ValueString)))
                             {
                                 case FixTokenResult.Nothing: break;
                                 case FixTokenResult.DeleteEntity: return table.DeleteSqlSync(uq);
@@ -177,7 +210,7 @@ namespace Signum.Engine.UserQueries
                         foreach (var item in uq.Columns.ToList())
                         {
                             QueryTokenDN token = item.Token;
-                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, false, item.DisplayName.HasText() ? "'{0}'".Formato(item.DisplayName) : null))
+                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, item.DisplayName.HasText() ? "'{0}'".Formato(item.DisplayName) : null))
                             {
                                 case FixTokenResult.Nothing: break;
                                 case FixTokenResult.DeleteEntity: ; return table.DeleteSqlSync(uq);
@@ -195,7 +228,7 @@ namespace Signum.Engine.UserQueries
                         foreach (var item in uq.Orders.ToList())
                         {
                             QueryTokenDN token = item.Token;
-                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, false, item.OrderType.ToString()))
+                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, item.OrderType.ToString()))
                             {
                                 case FixTokenResult.Nothing: break;
                                 case FixTokenResult.DeleteEntity: return table.DeleteSqlSync(uq);

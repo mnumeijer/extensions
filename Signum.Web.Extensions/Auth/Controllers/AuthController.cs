@@ -32,7 +32,7 @@ namespace Signum.Web.Auth
 
         public static event Action UserLogged;
         public static event Action<Controller, UserDN> UserPreLogin;
-        public static event Func<Controller, string> UserLoggedRedirect = c =>
+        public static Func<Controller, string> UserLoggedRedirect = c =>
         {
             string referrer = c.ControllerContext.HttpContext.Request["referrer"];
 
@@ -43,7 +43,7 @@ namespace Signum.Web.Auth
         };
 
         public static event Action UserLoggingOut;
-        public static event Func<Controller, string> UserLogoutRedirect = c =>
+        public static Func<Controller, string> UserLogoutRedirect = c =>
         {
             return RouteHelper.New().Action("Index", "Home");
         };
@@ -51,10 +51,10 @@ namespace Signum.Web.Auth
         [AcceptVerbs(HttpVerbs.Post)]
         public ActionResult SaveNewUser()
         {
-            var context = this.ExtractEntity<UserDN>().ApplyChanges(this.ControllerContext, UserMapping.NewUser).ValidateGlobal();
+            var context = this.ExtractEntity<UserDN>().ApplyChanges(this, UserMapping.NewUser).ValidateGlobal();
 
             if (context.HasErrors())
-                return context.JsonErrors();
+                return context.ToJsonModelState();
 
             context.Value.Execute(UserOperation.SaveNew);
             return this.DefaultExecuteResult(context.Value);
@@ -66,8 +66,7 @@ namespace Signum.Web.Auth
             ViewData[ViewDataKeys.Title] = AuthMessage.EnterTheNewPassword.NiceToString();
 
             var model = new SetPasswordModel { };
-            TypeContext tc = TypeContextUtilities.UntypedNew(model, this.Prefix());
-            return this.PopupOpen(new PopupViewOptions(tc));
+            return this.PopupView(model);
         }
 
         [AcceptVerbs(HttpVerbs.Post)]
@@ -75,7 +74,7 @@ namespace Signum.Web.Auth
         {
             var passPrefix = Request["passPrefix"];
 
-            var context = this.ExtractEntity<SetPasswordModel>(passPrefix).ApplyChanges(this.ControllerContext, true, passPrefix);
+            var context = this.ExtractEntity<SetPasswordModel>(passPrefix).ApplyChanges(this, passPrefix);
 
             UserDN user = this.ExtractLite<UserDN>()
                 .ExecuteLite(UserOperation.SetPassword, context.Value.Password);
@@ -111,7 +110,7 @@ namespace Signum.Web.Auth
                     using (AuthLogic.Disable())
                         user = AuthLogic.RetrieveUser(username);
 
-                    var context = user.ApplyChanges(this.ControllerContext, UserMapping.ChangePasswordOld, "").ValidateGlobal();
+                    var context = user.ApplyChanges(this, UserMapping.ChangePasswordOld, "").ValidateGlobal();
 
                     if (context.HasErrors())
                     {
@@ -130,7 +129,7 @@ namespace Signum.Web.Auth
                 }
                 else
                 {
-                    var context = UserDN.Current.ApplyChanges(this.ControllerContext, UserMapping.ChangePasswordOld, "").ValidateGlobal();
+                    var context = UserDN.Current.ApplyChanges(this, UserMapping.ChangePasswordOld, "").ValidateGlobal();
                     if (context.HasErrors())
                     {
                         ModelState.FromContext(context);
@@ -254,7 +253,7 @@ namespace Signum.Web.Auth
 
                 var user = request.User;
 
-                var context = user.ApplyChanges(this.ControllerContext, UserMapping.ChangePassword, "").ValidateGlobal();
+                var context = user.ApplyChanges(this, UserMapping.ChangePassword, "").ValidateGlobal();
 
                 if (!context.Errors.TryGetC(UserMapping.NewPasswordKey).IsNullOrEmpty() ||
                     !context.Errors.TryGetC(UserMapping.NewPasswordBisKey).IsNullOrEmpty())

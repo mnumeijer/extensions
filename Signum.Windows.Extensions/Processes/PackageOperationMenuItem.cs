@@ -9,7 +9,6 @@ using System.Windows.Media.Imaging;
 using System.Windows.Controls;
 using System.IO;
 using Microsoft.Win32;
-using Signum.Entities.Reports;
 using Signum.Services;
 using Signum.Utilities;
 using Signum.Windows;
@@ -24,7 +23,7 @@ namespace Signum.Windows.Processes
 {
     public static class PackageOperationMenuItemConsturctor
     {
-        public static MenuItem Construct(ContextualOperationContext coc)
+        public static MenuItem Construct(IContextualOperationContext coc)
         {
             MenuItem miResult = new MenuItem
             {
@@ -40,22 +39,22 @@ namespace Signum.Windows.Processes
                 AutomationProperties.SetHelpText(miResult, coc.CanExecute);
             }
 
+            coc.SenderMenuItem = miResult;
+
             miResult.Click += (object sender, RoutedEventArgs e) =>
             {
                 coc.SearchControl.SetDirtySelectedItems();
 
-                if (coc.OperationSettings != null && coc.OperationSettings.Click != null)
-                    coc.OperationSettings.Click(new ContextualOperationContext
-                     {
-                         Entities = coc.Entities,
-                         SearchControl = coc.SearchControl,
-                         OperationInfo = coc.OperationInfo,
-                     });
+                if (coc.OperationSettings != null && coc.OperationSettings.HasClick)
+                    coc.OperationSettings.OnClick(coc);
                 else
                 {
-                    IIdentifiable entity = Server.Return((IProcessServer s) => s.CreatePackageOperation(coc.Entities.ToList(), coc.OperationInfo.OperationSymbol));
+                    if (coc.ConfirmMessage())
+                    {
+                        IIdentifiable entity = Server.Return((IProcessServer s) => s.CreatePackageOperation(coc.Entities.ToList(), coc.OperationInfo.OperationSymbol));
 
-                    Navigator.Navigate(entity);
+                        Navigator.Navigate(entity);
+                    }
                 }
             };
 

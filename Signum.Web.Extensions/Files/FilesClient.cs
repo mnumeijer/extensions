@@ -28,7 +28,7 @@ namespace Signum.Web.Files
     {
         public static string ViewPrefix = "~/Files/Views/{0}.cshtml";
 
-        public static string Module = "Extensions/Signum.Web.Extensions/Files/Scripts/Files";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Files/Scripts/Files");
 
         public static void Start(bool filePath, bool file, bool embeddedFile)
         {
@@ -178,18 +178,19 @@ namespace Signum.Web.Files
 
                 var dqm = DynamicQueryManager.Current;
                
-                QuerySettings.FormatRules.Add(new FormatterRule(
+                QuerySettings.FormatRules.Add(new FormatterRule("WebImage",
                        col => col.Type == typeof(WebImage),
-                       col => (help, obj) => ((WebImage)obj).FullWebPath == null ? null :
-                           new MvcHtmlString("<img src='" +
-                               RouteHelper.New().Content(((WebImage)obj).FullWebPath) +
-                               "' alt='" + typeof(WebImage).NiceName() + "' class='sf-search-control-image' />")
+                       col => new CellFormatter((help, obj) => ((WebImage)obj).FullWebPath == null ? null :
+                           new HtmlTag("img")
+                           .Attr("src", RouteHelper.New().Content(((WebImage)obj).FullWebPath))
+                           .Attr("alt", typeof(WebImage).NiceName())
+                           .Attr("style", "width:80px").ToHtmlSelf()) { TextAlign = "center" }
                  ));
 
-                QuerySettings.FormatRules.Add(new FormatterRule(
+                QuerySettings.FormatRules.Add(new FormatterRule("WebDownload",
                        col => col.Type == typeof(WebDownload),
-                       col => (help, obj) => ((WebDownload)obj).FullWebPath == null ? null :
-                          new MvcHtmlString("<a href='{0}'>{1}</a>".Formato(RouteHelper.New().Content(((WebDownload)obj).FullWebPath), typeof(WebDownload).NiceName()))
+                       col => new CellFormatter((help, obj) => ((WebDownload)obj).FullWebPath == null ? null :
+                          new MvcHtmlString("<a href='{0}'>{1}</a>".Formato(RouteHelper.New().Content(((WebDownload)obj).FullWebPath), typeof(WebDownload).NiceName()))) { TextAlign = "center" }
                 ));
 
             }
@@ -199,7 +200,7 @@ namespace Signum.Web.Files
         private static HttpPostedFileBase GetHttpRequestFile(MappingContext ctx)
         {
             string fileKey = TypeContextUtilities.Compose(ctx.Prefix, FileLineKeys.File);
-            HttpPostedFileBase hpf = ctx.ControllerContext.HttpContext.Request.Files[fileKey] as HttpPostedFileBase;
+            HttpPostedFileBase hpf = ctx.Controller.ControllerContext.HttpContext.Request.Files[fileKey] as HttpPostedFileBase;
             return hpf;
         }
 

@@ -24,8 +24,10 @@ namespace Signum.Web.Chart
 
             if (result.QueryNameMatch != null)
                 html = html.Concat(" {0}".FormatHtml(result.QueryNameMatch.ToHtml()));
+            else
+                html = html.Concat(this.ColoredSpan(OmniboxMessage.Omnibox_Query.NiceToString() + "...", "lightgray"));
 
-            html = html.Concat(Icon());
+            html = Icon().Concat(html);
             
             return html;
         }
@@ -33,14 +35,14 @@ namespace Signum.Web.Chart
         public override string GetUrl(ChartOmniboxResult result)
         {
             if (result.QueryNameMatch != null)
-                return RouteHelper.New().Action("Index", "Chart", new { webQueryName = Navigator.ResolveWebQueryName(result.QueryName) });
+                return RouteHelper.New().Action("Index", "Chart", new { webQueryName = Finder.ResolveWebQueryName(result.QueryName) });
 
             return null;
         }
 
         public override MvcHtmlString Icon()
         {
-            return ColoredSpan(" ({0})".Formato(ChartMessage.Chart.NiceToString()), "violet");
+            return ColoredGlyphicon("glyphicon-stats", "violet");
         }
     }
 }

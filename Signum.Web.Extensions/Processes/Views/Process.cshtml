@@ -62,7 +62,7 @@
           {
     <script type="text/javascript">
         $(function () {
-            @(new JsFunction(ProcessesClient.Module, "refreshProgress", e.Value.Id, e.Prefix, Url.Action("GetProgressExecution", "Process")))
+            @(ProcessClient.Module["refreshProgress"](e.Value.Id, e.Prefix, Url.Action("GetProgressExecution", "Process")))
         })
     </script>
           }
@@ -70,14 +70,14 @@
           {
     <script type="text/javascript">
         $(function () {
-            @(new JsFunction(ProcessesClient.Module, "refreshPage", e.Prefix))
+            @(ProcessClient.Module["refreshPage"](e.Prefix))
         })
     </script>
           }
 
           e.LabelColumns = new BsColumn(3);
-    @Html.CountSearchControl(e, new FindOptions(typeof(ProcessExceptionLineDN), "Process", e.Value), csc =>
+    @Html.CountSearchControl(new FindOptions(typeof(ProcessExceptionLineDN), "Process", e.Value), new Context(e, "errors"), csc =>
         {
-            csc.PopupViewPrefix = e.Compose("errors");
+            csc.View = true;
         })
 }

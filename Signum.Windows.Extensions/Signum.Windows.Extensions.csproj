@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Signum.Windows.Extensions</RootNamespace>
     <AssemblyName>Signum.Windows.Extensions</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WarningLevel>4</WarningLevel>
@@ -46,6 +46,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -55,10 +56,12 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Partial|AnyCPU' ">
     <OutputPath>bin\Partial\</OutputPath>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json">
@@ -70,6 +73,7 @@
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Drawing" />
+    <Reference Include="System.ServiceModel" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xaml" />
@@ -192,45 +196,49 @@
     </Compile>
     <Compile Include="Chart\UserChartMenuItem.cs" />
     <Compile Include="Chart\UserChartOmniboxProvider.cs" />
-    <Compile Include="ControlPanels\ControlPanelSelector.xaml.cs">
-      <DependentUpon>ControlPanelSelector.xaml</DependentUpon>
+    <Compile Include="Dashboard\DashboardSelector.xaml.cs">
+      <DependentUpon>DashboardSelector.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\ControlPanelWindow.xaml.cs">
-      <DependentUpon>ControlPanelWindow.xaml</DependentUpon>
+    <Compile Include="Dashboard\DashboardWindow.xaml.cs">
+      <DependentUpon>DashboardWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\PartView\UserChartPartView.xaml.cs">
+    <Compile Include="Dashboard\PartView\UserChartPartView.xaml.cs">
       <DependentUpon>UserChartPartView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\PartView\LinkListPartView.xaml.cs">
+    <Compile Include="Dashboard\PartView\LinkListPartView.xaml.cs">
       <DependentUpon>LinkListPartView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\PartView\CountSearchControlPartView.xaml.cs">
+    <Compile Include="Dashboard\PartView\CountSearchControlPartView.xaml.cs">
       <DependentUpon>CountSearchControlPartView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\ControlPanelOmniboxProvider.cs" />
-    <Compile Include="ControlPanels\PartView\UserQueryPartView.xaml.cs">
+    <Compile Include="Dashboard\DashboardOmniboxProvider.cs" />
+    <Compile Include="Dashboard\PartView\UserQueryPartView.xaml.cs">
       <DependentUpon>UserQueryPartView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\Admin\CountSearchControlPartEdit.xaml.cs">
+    <Compile Include="Dashboard\Admin\CountSearchControlPartEdit.xaml.cs">
       <DependentUpon>CountSearchControlPartEdit.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\Admin\LinkListPartEdit.xaml.cs">
+    <Compile Include="Dashboard\Admin\LinkListPartEdit.xaml.cs">
       <DependentUpon>LinkListPartEdit.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\Admin\UserChartPartEdit.xaml.cs">
+    <Compile Include="Dashboard\Admin\UserChartPartEdit.xaml.cs">
       <DependentUpon>UserChartPartEdit.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\Admin\UserQueryPartEdit.xaml.cs">
+    <Compile Include="Dashboard\Admin\UserQueryPartEdit.xaml.cs">
       <DependentUpon>UserQueryPartEdit.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\ControlPanelClient.cs" />
-    <Compile Include="ControlPanels\ControlPanelView.xaml.cs">
-      <DependentUpon>ControlPanelView.xaml</DependentUpon>
+    <Compile Include="Dashboard\DashboardClient.cs" />
+    <Compile Include="Dashboard\DashboardView.xaml.cs">
+      <DependentUpon>DashboardView.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanels\StackColumnPanel.cs" />
+    <Compile Include="Dashboard\StackColumnPanel.cs" />
     <Compile Include="Converters.cs" />
-    <Compile Include="ControlPanels\Admin\ControlPanelEdit.xaml.cs">
-      <DependentUpon>ControlPanelEdit.xaml</DependentUpon>
+    <Compile Include="Dashboard\Admin\DashboardEdit.xaml.cs">
+      <DependentUpon>DashboardEdit.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="DiffLog\DiffLogClient.cs" />
+    <Compile Include="DiffLog\DiffLogTabs.xaml.cs">
+      <DependentUpon>DiffLogTabs.xaml</DependentUpon>
     </Compile>
     <Compile Include="Disconnected\UploadProgress.xaml.cs">
       <DependentUpon>UploadProgress.xaml</DependentUpon>
@@ -262,8 +270,17 @@
     <Compile Include="ExtensionsImageLoader.cs" />
     <Compile Include="Files\ImageFileExtension.cs" />
     <Compile Include="Isolation\IsolationClient.cs" />
+    <Compile Include="Isolation\IsolationWidget.xaml.cs">
+      <DependentUpon>IsolationWidget.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Mailing\ClientCertificationFile.xaml.cs">
       <DependentUpon>ClientCertificationFile.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Mailing\EmailAttachment.xaml.cs">
+      <DependentUpon>EmailAttachment.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Mailing\EmailMessage.xaml.cs">
+      <DependentUpon>EmailMessage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Mailing\EmailRecipient.xaml.cs">
       <DependentUpon>EmailRecipient.xaml</DependentUpon>
@@ -326,6 +343,9 @@
     <Compile Include="Scheduler\ScheduleRuleHourly.xaml.cs">
       <DependentUpon>ScheduleRuleHourly.xaml</DependentUpon>
     </Compile>
+    <Compile Include="SMS\MultipleSMS.xaml.cs">
+      <DependentUpon>MultipleSMS.xaml</DependentUpon>
+    </Compile>
     <Compile Include="SMS\SMSMessage.xaml.cs">
       <DependentUpon>SMSMessage.xaml</DependentUpon>
     </Compile>
@@ -345,24 +365,24 @@
       <DependentUpon>SyntaxHighlightBox.xaml</DependentUpon>
     </Compile>
     <Compile Include="SynthaxHighlight\TextUtilities.cs" />
-    <Compile Include="UserQueries\ImportUserAssetsConfirmation.xaml.cs">
+    <Compile Include="UserAssets\ImportUserAssetsConfirmation.xaml.cs">
       <DependentUpon>ImportUserAssetsConfirmation.xaml</DependentUpon>
     </Compile>
-    <Compile Include="UserQueries\QueryTokenDNBuilder.xaml.cs">
+    <Compile Include="UserAssets\QueryTokenDNBuilder.xaml.cs">
       <DependentUpon>QueryTokenDNBuilder.xaml</DependentUpon>
     </Compile>
-    <Compile Include="UserQueries\UserAssetsClient.cs" />
+    <Compile Include="UserAssets\UserAssetsClient.cs" />
     <Compile Include="UserQueries\UserQueryOmniboxProvider.cs" />
     <Compile Include="UserQueries\UserQueryClient.cs" />
     <Compile Include="UserQueries\UserQueryMenuItem.cs" />
     <Compile Include="UserQueries\UserQuery.xaml.cs">
       <DependentUpon>UserQuery.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Reports\ExcelReport.xaml.cs">
+    <Compile Include="Excel\ExcelReport.xaml.cs">
       <DependentUpon>ExcelReport.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Reports\PlainExcelMenuItem.cs" />
-    <Compile Include="Reports\ReportMenuItem.cs" />
+    <Compile Include="Excel\PlainExcelMenuItem.cs" />
+    <Compile Include="Excel\ReportMenuItem.cs" />
     <Compile Include="Panels\TreeMapPanel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
@@ -372,7 +392,7 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
-    <Compile Include="Reports\ReportClient.cs" />
+    <Compile Include="Excel\ReportClient.cs" />
     <Compile Include="Scheduler\HolidayCalendar.xaml.cs">
       <DependentUpon>HolidayCalendar.xaml</DependentUpon>
     </Compile>
@@ -566,53 +586,57 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="ControlPanels\Admin\ControlPanelEdit.xaml">
+    <Page Include="Dashboard\Admin\DashboardEdit.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="ControlPanels\ControlPanelSelector.xaml">
+    <Page Include="Dashboard\DashboardSelector.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="ControlPanels\ControlPanelWindow.xaml">
+    <Page Include="Dashboard\DashboardWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="ControlPanels\PartView\UserChartPartView.xaml">
+    <Page Include="Dashboard\PartView\UserChartPartView.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="ControlPanels\PartView\LinkListPartView.xaml">
+    <Page Include="Dashboard\PartView\LinkListPartView.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="ControlPanels\PartView\CountSearchControlPartView.xaml">
+    <Page Include="Dashboard\PartView\CountSearchControlPartView.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="ControlPanels\PartView\UserQueryPartView.xaml">
+    <Page Include="Dashboard\PartView\UserQueryPartView.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="ControlPanels\Admin\CountSearchControlPartEdit.xaml">
+    <Page Include="Dashboard\Admin\CountSearchControlPartEdit.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="ControlPanels\Admin\LinkListPartEdit.xaml">
+    <Page Include="Dashboard\Admin\LinkListPartEdit.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="ControlPanels\Admin\UserChartPartEdit.xaml">
+    <Page Include="Dashboard\Admin\UserChartPartEdit.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="ControlPanels\Admin\UserQueryPartEdit.xaml">
+    <Page Include="Dashboard\Admin\UserQueryPartEdit.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="ControlPanels\ControlPanelView.xaml">
+    <Page Include="Dashboard\DashboardView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="DiffLog\DiffLogTabs.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
     </Page>
     <Page Include="Disconnected\UploadProgress.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -652,7 +676,19 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Isolation\IsolationWidget.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Mailing\ClientCertificationFile.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Mailing\EmailAttachment.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Mailing\EmailMessage.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -732,6 +768,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="SMS\MultipleSMS.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="SMS\SMSMessage.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -752,11 +792,11 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="UserQueries\ImportUserAssetsConfirmation.xaml">
+    <Page Include="UserAssets\ImportUserAssetsConfirmation.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="UserQueries\QueryTokenDNBuilder.xaml">
+    <Page Include="UserAssets\QueryTokenDNBuilder.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -766,7 +806,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Reports\ExcelReport.xaml">
+    <Page Include="Excel\ExcelReport.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -897,12 +937,12 @@
     <Resource Include="Images\fondoLogin.jpg" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\bcerrar.png" />
-    <Resource Include="Images\bminimizar.png" />
+    <Resource Include="Images\bclose.png" />
+    <Resource Include="Images\bminimize.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\bcerrar-on.png" />
-    <Resource Include="Images\bminimizar-on.png" />
+    <Resource Include="Images\bclose-on.png" />
+    <Resource Include="Images\bminimize-on.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\document_view.png" />
@@ -1009,7 +1049,7 @@
     <Resource Include="Images\sms.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\controlPanel.png" />
+    <Resource Include="Images\dashboard.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\chartScript.png" />
@@ -1024,6 +1064,12 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Chart\Html\jquery-1.11.0.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\back.png" />
+    <Resource Include="Images\fast-back.png" />
+    <Resource Include="Images\fast-fore.png" />
+    <Resource Include="Images\fore.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

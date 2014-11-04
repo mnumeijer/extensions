@@ -15,10 +15,9 @@ using System.Reflection;
 using Signum.Entities.Authorization;
 using System.Linq.Expressions;
 using Signum.Engine.Exceptions;
-using Signum.Entities.Extensions.Scheduler;
 using Signum.Engine.Authorization;
 
-namespace Signum.Engine.Extensions.Scheduler
+namespace Signum.Engine.Scheduler
 {
     public static class ApplicationEventLogLogic
     {
@@ -38,7 +37,15 @@ namespace Signum.Engine.Extensions.Scheduler
                        s.Date,
                    });
 
+
+                ExceptionLogic.DeleteLogs += ExceptionLogic_DeleteLogs;
+
             }
+        }
+
+        public static void ExceptionLogic_DeleteLogs(DateTime limite)
+        {
+            Database.Query<ApplicationEventLogDN>().Where(a => a.Date < limite).UnsafeDelete();
         }
 
         public static void ApplicationStart()

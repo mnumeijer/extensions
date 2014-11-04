@@ -117,6 +117,11 @@ namespace Signum.Web.Translation
     //        return result;
     //    }
 
+    //    public bool AutoSelect()
+    //    {
+    //        return true;
+    //    }
+     
     //    public class googleResponse
     //    {
     //        public List<googleSentence> sentences;
@@ -165,7 +170,7 @@ namespace Signum.Web.Translation
     //                Headers = { { "Authorization", "Bearer " + token } }
     //            };
 
-    //            return list.GroupsOf(50).SelectMany(gr =>
+    //            return list.GroupsOf(a => a.Length, 10000).SelectMany(gr =>
     //            {
     //                TranslateArrayResponse[] result = client.TranslateArray("", gr.ToArray(), from, to, new TranslateOptions());
 
@@ -174,6 +179,12 @@ namespace Signum.Web.Translation
     //            }).ToList();
     //        }
     //    }
+
+    //    public bool AutoSelect()
+    //    {
+    //        return true;
+    //    }
+
     //}
 
     public static class AdmAuthentication

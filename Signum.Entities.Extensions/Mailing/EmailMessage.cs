@@ -89,7 +89,7 @@ namespace Signum.Entities.Mailing
 
         [SqlDbType(Size = int.MaxValue)]
         string subject;
-        [StringLengthValidator(AllowNulls = true, Min = 3)]
+        [StringLengthValidator(AllowNulls = true)]
         public string Subject
         {
             get { return subject; }
@@ -98,7 +98,7 @@ namespace Signum.Entities.Mailing
 
         [SqlDbType(Size = int.MaxValue)]
         string body;
-        [StringLengthValidator(AllowNulls = true, Min = 3)]
+        [StringLengthValidator(AllowNulls = true)]
         public string Body
         {
             get { return body; }
@@ -116,7 +116,7 @@ namespace Signum.Entities.Mailing
 
         [NotNullable, SqlDbType(Size = 150)]
         string bodyHash;
-        [StringLengthValidator(AllowNulls = false, Min = 3, Max = 150)]
+        [StringLengthValidator(AllowNulls = false, Min = 1, Max = 150)]
         public string BodyHash
         {
             get { return bodyHash; }
@@ -258,11 +258,6 @@ namespace Signum.Entities.Mailing
         }
     }
 
-
-
-
-
-
     [Serializable]
     public class EmailAttachmentDN : EmbeddedEntity
     {
@@ -289,9 +284,9 @@ namespace Signum.Entities.Mailing
             }
         }
 
-        [NotNullable, SqlDbType(Size = 100)]
+        [NotNullable, SqlDbType(Size = 300)]
         string contentId;
-        [StringLengthValidator(AllowNulls = false, Min = 3, Max = 100)]
+        [StringLengthValidator(AllowNulls = false, Min = 3, Max = 300)]
         public string ContentId
         {
             get { return contentId; }
@@ -311,6 +306,11 @@ namespace Signum.Entities.Mailing
         internal bool Similar(EmailAttachmentDN a)
         {
             return ContentId == a.ContentId || File.FileName == a.File.FileName;
+        }
+
+        public override string ToString()
+        {
+            return file.TryToString();
         }
     }
 
@@ -479,7 +479,7 @@ namespace Signum.Entities.Mailing
         public Lite<IEmailOwnerDN> Owner { get; set; }
         public string Email { get; set; }
         public string DisplayName { get; set; }
-        public CultureInfo CultureInfo { get; set; }
+        public CultureInfoDN CultureInfo { get; set; }
 
         public bool Equals(EmailOwnerData other)
         {
@@ -527,6 +527,9 @@ namespace Signum.Entities.Mailing
         RemainingMessages,
         ExceptionMessages,
         DefaultFromIsMandatory,
+        From,
+        To,
+        Attachments
     }
 
     [Serializable, EntityKind(EntityKind.System, EntityData.Transactional)]

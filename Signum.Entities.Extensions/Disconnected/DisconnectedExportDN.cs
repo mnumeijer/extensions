@@ -10,7 +10,7 @@ using Signum.Entities.Basics;
 namespace Signum.Entities.Disconnected
 {
     [Serializable, EntityKind(EntityKind.System, EntityData.Transactional)]
-    public class DisconnectedExportDN : IdentifiableEntity
+    public class DisconnectedExportDN : Entity
     {
         DateTime creationDate = TimeZoneManager.Now;
         public DateTime CreationDate
@@ -59,7 +59,7 @@ namespace Signum.Entities.Disconnected
             set { Set(ref disableForeignKeys, value); }
         }
 
-        [NotNullable]
+        [NotNullable, PreserveOrder]
         MList<DisconnectedExportTableDN> copies = new MList<DisconnectedExportTableDN>();
         public MList<DisconnectedExportTableDN> Copies
         {
@@ -170,20 +170,6 @@ namespace Signum.Entities.Disconnected
             return result;
         }
 
-        protected override void PreSaving(ref bool graphModified)
-        {
-            if (Copies != null)
-                copies.ForEach((a, i) => a.Order = i);
-
-            base.PreSaving(ref graphModified);
-        }
-
-        protected override void PostRetrieving()
-        {
-            copies.Sort(a => a.Order);
-            base.PostRetrieving();
-        }
-
         static Expression<Func<DisconnectedExportDN, int>> CalculateTotalExpression =
             stat =>
                 stat.Lock.Value +
@@ -265,13 +251,6 @@ namespace Signum.Entities.Disconnected
         {
             get { return errors; }
             set { Set(ref errors, value); }
-        }
-
-        int order;
-        public int Order
-        {
-            get { return order; }
-            set { Set(ref order, value); }
         }
     }
 }

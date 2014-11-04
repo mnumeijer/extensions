@@ -25,7 +25,7 @@ namespace Signum.Engine.Authorization
 
         public static bool IsStarted { get { return cache != null; } }
 
-        public static readonly HashSet<OperationSymbol> AvoidAutomaticUpgrade = new HashSet<OperationSymbol>();
+        public static readonly HashSet<OperationSymbol> AvoidAutomaticUpgradeCollection = new HashSet<OperationSymbol>();
 
         public static void Start(SchemaBuilder sb)
         {
@@ -44,7 +44,8 @@ namespace Signum.Engine.Authorization
                      coercer:  OperationCoercer.Instance);
 
                 AuthLogic.SuggestRuleChanges += SuggestOperationRules;
-                AuthLogic.ExportToXml += () => cache.ExportXml("Operations", "Operation", s=>s.Key, b => b.ToString());
+                AuthLogic.ExportToXml += exportAll => cache.ExportXml("Operations", "Operation", s => s.Key, b => b.ToString(),
+                    exportAll ? OperationLogic.RegisteredOperations.ToList() : null);
                 AuthLogic.ImportFromXml += (x, roles, replacements) =>
                 {
                     string replacementKey = typeof(OperationSymbol).Name;
@@ -58,6 +59,13 @@ namespace Signum.Engine.Authorization
                         s => SymbolLogic<OperationSymbol>.TryToSymbol(replacements.Apply(replacementKey, s)), EnumExtensions.ToEnum<OperationAllowed>);
                 };
             }
+        }
+
+        public static T AvoidAutomaticUpgrade<T>(this T operation) where T : IOperation
+        {
+            AvoidAutomaticUpgradeCollection.Add(operation.OperationSymbol);
+
+            return operation;
         }
 
         static Action<Lite<RoleDN>> SuggestOperationRules()
@@ -233,7 +241,7 @@ namespace Signum.Engine.Authorization
                 var operation = OperationLogic.FindOperation(t, operationKey);
 
                 Type resultType = operation.OperationType == OperationType.ConstructorFrom ||
-                    operation.OperationType == OperationType.ConstructorFromMany ? operation.ReturnType : operation.Type;
+                    operation.OperationType == OperationType.ConstructorFromMany ? operation.ReturnType : operation.OverridenType;
 
                 var result = operationAllowed(resultType);
 
@@ -241,7 +249,7 @@ namespace Signum.Engine.Authorization
                     return result;
 
                 Type fromType = operation.OperationType == OperationType.ConstructorFrom ||
-                    operation.OperationType == OperationType.ConstructorFromMany ? operation.Type : null;
+                    operation.OperationType == OperationType.ConstructorFromMany ? operation.OverridenType : null;
 
                 if (fromType == null)
                     return result;
@@ -261,7 +269,7 @@ namespace Signum.Engine.Authorization
                 Max(baseValues.Select(a => a.Value)):
                 Min(baseValues.Select(a => a.Value));
 
-            if (OperationAuthLogic.AvoidAutomaticUpgrade.Contains(key))
+            if (!BasicPermission.AutomaticUpgradeOfOperations.IsAuthorized(role) || OperationAuthLogic.AvoidAutomaticUpgradeCollection.Contains(key))
                return best;
 
             if (baseValues.Where(a => a.Value.Equals(best)).All(a => GetDefault(key, a.Key).Equals(a.Value)))
@@ -311,7 +319,7 @@ namespace Signum.Engine.Authorization
         {
             return key => 
             {
-                if (OperationAuthLogic.AvoidAutomaticUpgrade.Contains(key))
+                if (!BasicPermission.AutomaticUpgradeOfOperations.IsAuthorized(role) || OperationAuthLogic.AvoidAutomaticUpgradeCollection.Contains(key))
                     return AuthLogic.GetDefaultAllowed(role) ? OperationAllowed.Allow : OperationAllowed.None;
 
                 return GetDefault(key, role);

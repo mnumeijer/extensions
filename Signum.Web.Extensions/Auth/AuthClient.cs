@@ -34,7 +34,7 @@ namespace Signum.Web.Auth
  
         public static string ViewPrefix = "~/auth/Views/{0}.cshtml";
 
-        public static string Module = "Extensions/Signum.Web.Extensions/Auth/Scripts/Auth";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Auth/Scripts/Auth");
         
         public static string LoginView = ViewPrefix.Formato("Login");
         public static string LoginUserControlView = ViewPrefix.Formato("LoginUserControl");
@@ -97,7 +97,7 @@ namespace Signum.Web.Auth
 
                 if (queries)
                 {
-                    manager.IsFindable += QueryAuthLogic.GetQueryAllowed;
+                    Finder.Manager.IsFindable += QueryAuthLogic.GetQueryAllowed;
                 }
 
                 AuthenticationRequiredAttribute.Authenticate = context =>
@@ -132,16 +132,16 @@ namespace Signum.Web.Auth
 
                 OperationClient.AddSettings(new List<OperationSettings>
                 {
-                    new EntityOperationSettings(UserOperation.SetPassword) 
+                    new EntityOperationSettings<UserDN>(UserOperation.SetPassword) 
                     { 
-                        OnClick = ctx => new JsOperationFunction(Module, "setPassword", 
+                        Click = ctx => Module["setPassword"](ctx.Options(), 
                             ctx.Url.Action((AuthController c)=>c.SetPasswordModel()),
                             ctx.Url.Action((AuthController c)=>c.SetPasswordOnOk()))
                     },
 
-                    new EntityOperationSettings(UserOperation.SaveNew) 
+                    new EntityOperationSettings<UserDN>(UserOperation.SaveNew) 
                     { 
-                         OnClick = ctx => new JsOperationFunction(Module, "saveNew", 
+                         Click = ctx => Module["saveNew"](ctx.Options(), 
                             ctx.Url.Action((AuthController c)=>c.SaveNewUser()))
                     }
                 });

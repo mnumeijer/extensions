@@ -20,11 +20,14 @@ using Signum.Entities.Authorization;
 using System.Linq.Expressions;
 using Signum.Engine.Cache;
 using Signum.Entities.Basics;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Scheduler
 {
     public static class SchedulerLogic
     {
+        public static Func<ITaskDN, IDisposable> ApplySession;
+
         static Expression<Func<ITaskDN, IQueryable<ScheduledTaskLogDN>>> ExecutionsExpression =
          ct => Database.Query<ScheduledTaskLogDN>().Where(a => a.Task == ct);
         public static IQueryable<ScheduledTaskLogDN> Executions(this ITaskDN e)
@@ -37,6 +40,14 @@ namespace Signum.Engine.Scheduler
         public static ScheduledTaskLogDN LastExecution(this ITaskDN e)
         {
             return LastExecutionExpression.Evaluate(e);
+        }
+
+        static Expression<Func<ScheduledTaskDN, IQueryable<ScheduledTaskLogDN>>> ExecutionsSTExpression =
+            ct => Database.Query<ScheduledTaskLogDN>().Where(a => a.ScheduledTask == ct);
+        [ExpressionField("ExecutionsSTExpression")]
+        public static IQueryable<ScheduledTaskLogDN> Executions(this ScheduledTaskDN e)
+        {
+            return ExecutionsSTExpression.Evaluate(e);
         }
 
         public static Polymorphic<Func<ITaskDN, Lite<IIdentifiable>>> ExecuteTask = new Polymorphic<Func<ITaskDN, Lite<IIdentifiable>>>();
@@ -70,13 +81,13 @@ namespace Signum.Engine.Scheduler
                 if (!imp2.Equals(imp2))
                     throw new InvalidOperationException("Implementations of ScheduledTaskDN.Task should be the same as in ScheduledTaskLogDN.Task");
 
+                PermissionAuthLogic.RegisterPermissions(SchedulerPermission.ViewSchedulerPanel);
 
                 ExecuteTask.Register((ITaskDN t) => { throw new NotImplementedException("SchedulerLogic.ExecuteTask not registered for {0}".Formato(t.GetType().Name)); });
 
                 SimpleTaskLogic.Start(sb, dqm);
                 sb.Include<ScheduledTaskDN>();
                 sb.Include<ScheduledTaskLogDN>();
-                sb.Schema.Initializing[InitLevel.Level4BackgroundProcesses] += Schema_InitializingApplicaton;
 
                 dqm.RegisterQuery(typeof(HolidayCalendarDN), () =>
                      from st in Database.Query<HolidayCalendarDN>()
@@ -121,6 +132,7 @@ namespace Signum.Engine.Scheduler
 
                 dqm.RegisterExpression((ITaskDN ct) => ct.Executions(), () => TaskMessage.Executions.NiceToString());
                 dqm.RegisterExpression((ITaskDN ct) => ct.LastExecution(), () => TaskMessage.LastExecution.NiceToString());
+                dqm.RegisterExpression((ScheduledTaskDN ct) => ct.Executions(), () => TaskMessage.Executions.NiceToString());
 
                 new Graph<HolidayCalendarDN>.Execute(HolidayCalendarOperation.Save)
                 {
@@ -129,12 +141,23 @@ namespace Signum.Engine.Scheduler
                     Execute = (c, _) => { },
                 }.Register();
 
+                new Graph<HolidayCalendarDN>.Delete(HolidayCalendarOperation.Delete)
+                {
+                    Delete = (c, _) => { c.Delete(); },
+                }.Register();
+
                 new Graph<ScheduledTaskDN>.Execute(ScheduledTaskOperation.Save)
                 {
                     AllowsNew = true,
                     Lite = false,
                     Execute = (st, _) => { },
                 }.Register();
+
+                new Graph<ScheduledTaskDN>.Delete(ScheduledTaskOperation.Delete)
+                {
+                    Delete = (st, _) => { st.Executions().UnsafeDelete(); var rule = st.Rule; st.Delete(); rule.Delete(); },
+                }.Register();
+
 
                 new Graph<IIdentifiable>.ConstructFrom<ITaskDN>(TaskOperation.ExecuteSync)
                 {
@@ -152,18 +175,21 @@ namespace Signum.Engine.Scheduler
                     new InvalidateWith(typeof(ScheduledTaskDN)));
 
                 ScheduledTasksLazy.OnReset += ScheduledTasksLazy_OnReset;
+
+                ExceptionLogic.DeleteLogs += ExceptionLogic_DeleteLogs;
             }
+        }
+
+        public static void ExceptionLogic_DeleteLogs(DateTime limite)
+        {
+            Database.Query<ScheduledTaskLogDN>().Where(a => a.StartTime < limite).UnsafeDelete();
         }
 
         static void ScheduledTasksLazy_OnReset(object sender, EventArgs e)
         {
-            ReloadPlan();
+            Task.Factory.StartNew(() => { Thread.Sleep(1000); ReloadPlan(); });
         }
 
-        static void Schema_InitializingApplicaton()
-        {
-            ReloadPlan();
-        }
 
         static bool running = false;
         public static bool Running
@@ -300,6 +326,7 @@ namespace Signum.Engine.Scheduler
         public static Lite<IIdentifiable> ExecuteSync(ITaskDN task, ScheduledTaskDN scheduledTask, IUserDN user)
         {
             using (AuthLogic.UserSession(AuthLogic.SystemUser))
+            using (Disposable.Combine(ApplySession, f => f(task)))
             {
                 ScheduledTaskLogDN stl = new ScheduledTaskLogDN
                 {
@@ -311,11 +338,18 @@ namespace Signum.Engine.Scheduler
                     ApplicationName = Schema.Current.ApplicationName
                 };
 
+                using (Transaction tr = Transaction.ForceNew())
+                {
+                    stl.Save();
+                 
+                    tr.Commit();
+                }
+
                 try
                 {
                     using (Transaction tr = new Transaction())
                     {
-                        stl.Save();
+                        
 
                         stl.ProductEntity = ExecuteTask.Invoke(task);
 
@@ -334,17 +368,9 @@ namespace Signum.Engine.Scheduler
 
                     using (Transaction tr2 = Transaction.ForceNew())
                     {
-                        ScheduledTaskLogDN cte2 = new ScheduledTaskLogDN
-                        {
-                            Task = stl.Task,
-                            StartTime = stl.StartTime,
-                            ScheduledTask = scheduledTask, 
-                            User = stl.User,
-                            MachineName = stl.MachineName,
-                            ApplicationName = stl.ApplicationName,
-                            EndTime = TimeZoneManager.Now,
-                            Exception = exLog,
-                        }.Save();
+                        stl.Exception = exLog;
+
+                        stl.Save();
 
                         tr2.Commit();
                     }

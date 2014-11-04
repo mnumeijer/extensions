@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Signum.Engine.Extensions</RootNamespace>
     <AssemblyName>Signum.Engine.Extensions</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SccProjectName>
     </SccProjectName>
@@ -50,6 +50,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -59,10 +60,12 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Partial|AnyCPU' ">
     <OutputPath>bin\Partial\</OutputPath>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="DocumentFormat.OpenXml, Version=2.0.5022.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -118,7 +121,8 @@
     </Compile>
     <Compile Include="Chart\ChartScriptLogic.cs" />
     <Compile Include="Chart\UserChartLogic.cs" />
-    <Compile Include="ControlPanel\ControlPanelLogic.cs" />
+    <Compile Include="Dashboard\DashboardLogic.cs" />
+    <Compile Include="DiffLog\DiffLogLogic.cs" />
     <Compile Include="Disconnected\DisconnectedTools.cs" />
     <Compile Include="Disconnected\LocalBackupManager.cs" />
     <Compile Include="Disconnected\ImportManager.cs" />
@@ -138,13 +142,12 @@
     <Compile Include="Mailing\EmailMasterTemplateLogic.cs" />
     <Compile Include="Mailing\EmailTemplateParser.Nodes.cs" />
     <Compile Include="Mailing\EmailTemplateRenderer.cs" />
+    <Compile Include="Mailing\Pop3\IPop3Client.cs" />
     <Compile Include="Mailing\Pop3\Pop3ConfigurationLogic.cs" />
-    <Compile Include="Mailing\Pop3\MailMimeParser.cs" />
-    <Compile Include="Mailing\Pop3\Pop3Client.cs" />
     <Compile Include="Mailing\SystemEmailLogic.cs" />
     <Compile Include="Processes\ProcessRunnerLogic.cs" />
     <Compile Include="Scheduler\ApplicationEventLogLogic.cs" />
-    <Compile Include="Translation\CultureInfoLogic.cs" />
+    <Compile Include="Basics\CultureInfoLogic.cs" />
     <Compile Include="Translation\TranslatedInstanceLogic.cs" />
     <Compile Include="Mailing\EmailLogic.cs" />
     <Compile Include="Mailing\EmailTemplateParser.cs" />
@@ -157,14 +160,15 @@
     <Compile Include="Processes\ProcessLogic.cs" />
     <Compile Include="Profiler\ProfilerLogic.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Reports\ExcelGenerator.cs" />
-    <Compile Include="Reports\CellBuilder.cs" />
-    <Compile Include="Reports\ExcelExtensions.cs" />
-    <Compile Include="Reports\PlainExcelGenerator.cs" />
-    <Compile Include="Reports\ReportSpreedsheetsLogic.cs" />
+    <Compile Include="Excel\ExcelGenerator.cs" />
+    <Compile Include="Excel\CellBuilder.cs" />
+    <Compile Include="Excel\ExcelExtensions.cs" />
+    <Compile Include="Excel\PlainExcelGenerator.cs" />
+    <Compile Include="Excel\ExcelLogic.cs" />
     <Compile Include="Translation\TranslationLogic.cs" />
     <Compile Include="Translation\TranslationReplacementLogic.cs" />
-    <Compile Include="UserQueries\QueryTokenSynchronizer.cs" />
+    <Compile Include="UserAssets\QueryTokenSynchronizer.cs" />
+    <Compile Include="ViewLog\ViewLogLogic.cs" />
     <Compile Include="UserQueries\UserQueryLogic.cs" />
     <Compile Include="Scheduler\SchedulerLogic.cs" />
     <Compile Include="Scheduler\SimpleTaskLogic.cs" />
@@ -172,7 +176,7 @@
     <Compile Include="SMS\SMSLogic.cs" />
     <Compile Include="SMS\SMSProcessAlgortihms.cs" />
     <Compile Include="SMS\SMSTemplateGraph.cs" />
-    <Compile Include="UserQueries\UserAssetsLogic.cs" />
+    <Compile Include="UserAssets\UserAssetsExporterImporter.cs" />
     <Compile Include="WikiMarkup\WikiParserExtensions.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -196,33 +200,33 @@
   <ItemGroup>
     <EmbeddedResource Include="Help\SignumFrameworkHelp.xsd" />
     <None Include="Chart\ChartScripts\charts.psd" />
-    <EmbeddedResource Include="Reports\plainExcelTemplate.xlsx" />
+    <EmbeddedResource Include="Excel\plainExcelTemplate.xlsx" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Help\Sample.xml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Chart\ChartScripts\Bars.xml" />
-    <Content Include="Chart\ChartScripts\BoxPack.xml" />
     <Content Include="Chart\ChartScripts\BubblePack.xml" />
     <Content Include="Chart\ChartScripts\Bubbleplot.xml" />
     <Content Include="Chart\ChartScripts\CalendarStream.xml" />
     <Content Include="Chart\ChartScripts\Columns.xml" />
-    <Content Include="Chart\ChartScripts\Doughnut.xml" />
     <Content Include="Chart\ChartScripts\Force graph.xml" />
     <Content Include="Chart\ChartScripts\Line.xml" />
     <Content Include="Chart\ChartScripts\MultiBars.xml" />
     <Content Include="Chart\ChartScripts\MultiColumns.xml" />
     <Content Include="Chart\ChartScripts\MultiLines.xml" />
     <Content Include="Chart\ChartScripts\ParallelCordiantes.xml" />
+    <Content Include="Chart\ChartScripts\Pie.xml" />
     <Content Include="Chart\ChartScripts\Punchcard.xml" />
     <Content Include="Chart\ChartScripts\Scatterplot.xml" />
     <Content Include="Chart\ChartScripts\StackedBars.xml" />
     <Content Include="Chart\ChartScripts\StackedColumns.xml" />
     <Content Include="Chart\ChartScripts\StackedLines.xml" />
+    <Content Include="Chart\ChartScripts\TreeMap.xml" />
     <Content Include="Chart\ChartScripts\WorldMap.xml" />
-    <Content Include="Reports\DocumentFormat.OpenXml.dll" />
-    <Content Include="Reports\DocumentFormat.OpenXml.xml" />
+    <Content Include="Excel\DocumentFormat.OpenXml.dll" />
+    <Content Include="Excel\DocumentFormat.OpenXml.xml" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
