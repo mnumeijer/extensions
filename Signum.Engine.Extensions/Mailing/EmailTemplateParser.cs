@@ -19,92 +19,13 @@ using Signum.Engine.Basics;
 using Signum.Engine.Maps;
 using Signum.Utilities.DataStructures;
 using System.Collections.Concurrent;
+using Signum.Engine.Templating;
 
 
 namespace Signum.Engine.Mailing
 {
-    public class GlobalVarContext
-    {
-        public IIdentifiable Entity;
-        public CultureInfo Culture;
-        public bool IsHtml;
-        public ISystemEmail SystemEmail;
-    }
-
     public static partial class EmailTemplateParser
     {
-        class SemiStructuralEqualityComparer : IEqualityComparer<object>
-        {
-            public static readonly SemiStructuralEqualityComparer Comparer = new SemiStructuralEqualityComparer();
-
-            ConcurrentDictionary<Type, List<Func<object, object>>> Cache = new ConcurrentDictionary<Type, List<Func<object, object>>>();
-
-            public List<Func<object, object>> GetFieldGetters(Type type)
-            {
-                return Cache.GetOrAdd(type, t =>
-                    t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                    .Where(f => !f.HasAttribute<IgnoreAttribute>())
-                    .Select(fi => Signum.Utilities.Reflection.ReflectionTools.CreateGetterUntyped(t, fi)).ToList());
-            }
-
-            bool IEqualityComparer<object>.Equals(object x, object y)
-            {
-                if (x == null || y == null)
-                    return x == null && y == null;
-
-                Type t = x.GetType();
-
-                if (IsSimple(t))
-                    return x.Equals(y);
-
-                var fields = GetFieldGetters(t);
-                for (int i = 0; i < fields.Count; i++)
-                {
-                    var f = fields[i];
-                    if (!Equals(f(x), f(y)))
-                        return false;
-                }
-
-
-                return true;
-            }
-
-            public int GetHashCode(object obj)
-            {
-                if (obj == null)
-                    return 0;
-
-                Type t = obj.GetType();
-
-                if (IsSimple(t))
-                    return obj.GetHashCode();
-
-                int result = 1;
-
-                var fields = GetFieldGetters(t);
-                for (int i = 0; i < fields.Count; i++)
-                    result ^= GetHashCode(fields[i](obj)) << (i % 8);
-
-                return result;
-            }
-
-            static bool IsSimple(Type t)
-            {
-                return t == typeof(string) || Type.GetTypeCode(t) >= TypeCode.Boolean ||
-                    typeof(IIdentifiable).IsAssignableFrom(t) || typeof(Lite<IIdentifiable>).IsAssignableFrom(t) ||
-                    typeof(IEquatable<>).MakeGenericType(t).IsAssignableFrom(t);
-            }
-        }
-
-        public static Dictionary<string, Func<GlobalVarContext, object>> GlobalVariables = new Dictionary<string, Func<GlobalVarContext, object>>();
-
-        public static object DistinctSingle(this IEnumerable<ResultRow> rows, ResultColumn column)
-        {
-            return rows.Select(r => r[column]).Distinct(SemiStructuralEqualityComparer.Comparer).SingleEx(
-                () =>"No values for column {0}".Formato(column.Column.Token.FullKey()),
-                () =>"Multiple values for column {0}".Formato(column.Column.Token.FullKey()));
-        }
-
         public static BlockNode Parse(string text, QueryDescription qd, Type modelType)
         {
             return new TemplateWalker(text, qd, modelType).Parse();      
@@ -115,20 +36,8 @@ namespace Signum.Engine.Mailing
             return new TemplateWalker(text, qd, modelType).TryParse(out errorMessage);
         }
 
-        struct Error
-        {
-            public string Message; 
-            public bool IsFatal; 
-        }
-
         internal class TemplateWalker
         {
-            public static readonly Regex KeywordsRegex = new Regex(@"\@(((?<keyword>(foreach|if|raw|global|model|modelraw|any|declare|))\[(?<token>[^\]]+)\](\s+as\s+(?<dec>\$\w*))?)|(?<keyword>endforeach|else|endif|notany|endany))");
-
-            public static readonly Regex TokenFormatRegex = new Regex(@"(?<token>[^\]\:]+)(\:(?<format>.*))?");
-            public static readonly Regex TokenOperationValueRegex = new Regex(@"(?<token>[^\]]+)(?<comparer>(" + FilterValueConverter.OperationRegex + @"))(?<value>[^\]\:]+)");
-
-
             QueryDescription qd;
             Type modelType;
             string text;
@@ -136,8 +45,8 @@ namespace Signum.Engine.Mailing
 
             BlockNode mainBlock;
             Stack<BlockNode> stack;
-            ScopedDictionary<string, ParsedToken> variables;
-            List<Error> errors;
+            ScopedDictionary<string, ValueProviderBase> variables;
+            List<TemplateError> errors;
 
             public TemplateWalker(string text, QueryDescription qd, Type modelType)
             {
@@ -178,64 +87,32 @@ namespace Signum.Engine.Mailing
 
             internal void AddError(bool fatal, string message)
             {
-                errors.Add(new Error{ IsFatal = fatal, Message = message}); 
+                errors.Add(new TemplateError(fatal, message)); 
             }
 
-            void DeclareVariable(ParsedToken token)
+            void DeclareVariable(ValueProviderBase token)
             {
                 if (token.Variable.HasText())
                 {
                     if (variables.ContainsKey(token.Variable))
-                        AddError(true, "There's already a variable '{0}' defined in this scope".Formato(token.Variable));
+                        AddError(true, "There's already a variable '{0}' defined in this scope".FormatWith(token.Variable));
 
                     variables.Add(token.Variable, token);
                 }
-            }
-
-            ParsedToken TryParseToken(string tokenString, string variable, SubTokensOptions options)
-            {
-                ParsedToken result = new ParsedToken { String = tokenString, Variable = variable };
-
-                if (tokenString.StartsWith("$"))
-                {
-                    string v = tokenString.TryBefore('.') ?? tokenString;
-
-                    ParsedToken token;
-
-                    if (!variables.TryGetValue(v, out token))
-                    {
-                        AddError(false, "Variable '{0}' is not defined at this scope".Formato(v));
-                        return result;
-                    }
-
-                    var after = tokenString.TryAfter('.');
-
-                    tokenString = token.QueryToken.FullKey() + (after == null ? null : ("." + after));
-                }
-
-                try
-                {
-                    result.QueryToken = QueryUtils.Parse(tokenString, qd, options);
-                }
-                catch (Exception ex)
-                {
-                    AddError(false, ex.Message);
-                }
-                return result;
             }
 
             public BlockNode PopBlock(Type type)
             {
                 if (stack.Count() <= 1)
                 {
-                    AddError(true, "No {0} has been opened".Formato(BlockNode.UserString(type)));
+                    AddError(true, "No {0} has been opened".FormatWith(BlockNode.UserString(type)));
                     return null;
                 }
                 var n = stack.Pop();
                 variables = variables.Previous;
                 if (n.owner == null || n.owner.GetType() != type)
                 {
-                    AddError(true, "Unexpected '{0}'".Formato(BlockNode.UserString(n.owner.Try(p => p.GetType()))));
+                    AddError(true, "Unexpected '{0}'".FormatWith(BlockNode.UserString(n.owner.Try(p => p.GetType()))));
                     return null;
                 }
                 return n;
@@ -244,17 +121,17 @@ namespace Signum.Engine.Mailing
             public void PushBlock(BlockNode block)
             {
                 stack.Push(block);
-                variables = new ScopedDictionary<string, ParsedToken>(variables); 
+                variables = new ScopedDictionary<string, ValueProviderBase>(variables); 
             }
 
             void ParseInternal()
             {
                 this.mainBlock = new BlockNode(null);
                 this.stack = new Stack<BlockNode>();
-                this.errors = new List<Error>(); 
+                this.errors = new List<TemplateError>(); 
                 PushBlock(mainBlock);
 
-                var matches = KeywordsRegex.Matches(text);
+                var matches = TemplateUtils.KeywordsRegex.Matches(text);
 
                 if (matches.Count == 0)
                 {
@@ -270,6 +147,7 @@ namespace Signum.Engine.Mailing
                     {
                         stack.Peek().Nodes.Add(new LiteralNode { Text = text.Substring(index, match.Index - index) });
                     }
+                    var type = match.Groups["type"].Value;
                     var token = match.Groups["token"].Value;
                     var keyword = match.Groups["keyword"].Value;
                     var dec = match.Groups["dec"].Value;
@@ -277,58 +155,50 @@ namespace Signum.Engine.Mailing
                     {
                         case "":
                         case "raw":
-                            var tok = TokenFormatRegex.Match(token);
+                            var tok = TemplateUtils.TokenFormatRegex.Match(token);
                             if (!tok.Success)
-                                AddError(true, "{0} has invalid format".Formato(token));
+                                AddError(true, "{0} has invalid format".FormatWith(token));
                             else
                             {
-                                var t = TryParseToken(tok.Groups["token"].Value, dec, SubTokensOptions.CanElement);
+                                var t = TryParseValueProvider(type, tok.Groups["token"].Value, dec);
 
-                                stack.Peek().Nodes.Add(new TokenNode(t, tok.Groups["format"].Value,
-                                    isRaw: keyword.Contains("raw"),
-                                    walker: this));
+                                stack.Peek().Nodes.Add(new ValueNode(t, tok.Groups["format"].Value, isRaw: keyword.Contains("raw")));
 
                                 DeclareVariable(t);
                             }
                             break;
                         case "declare":
                             {
-                                var t = TryParseToken(token, dec, SubTokensOptions.CanElement);
+                                var t = TryParseValueProvider(type, token, dec);
 
-                                stack.Peek().Nodes.Add(new DeclareNode(t, this));
+                                stack.Peek().Nodes.Add(new DeclareNode(t, this.AddError));
 
                                 DeclareVariable(t);
                             }
                             break;
-                        case "global":
-                            stack.Peek().Nodes.Add(new GlobalNode(token, walker: this));
-                            break;
-                        case "model":
-                        case "modelraw":
-                            stack.Peek().Nodes.Add(new ModelNode(token, modelType, walker: this) { IsRaw = keyword == "modelraw" });
-                            break;
                         case "any":
                             {
                                 AnyNode any;
-                                ParsedToken t;
-                                var filter = TokenOperationValueRegex.Match(token);
+                                ValueProviderBase vp;
+                                var filter = TemplateUtils.TokenOperationValueRegex.Match(token);
                                 if (!filter.Success)
                                 {
-                                    t = TryParseToken(token, dec, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll);
-                                    any = new AnyNode(t, this);
+                                    vp = TryParseValueProvider(type, token, dec);
+
+                                    any = new AnyNode(vp);
                                 }
                                 else
                                 {
-                                    t = TryParseToken(filter.Groups["token"].Value,  dec, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll);
+                                    vp = TryParseValueProvider(type, filter.Groups["token"].Value, dec);
                                     var comparer = filter.Groups["comparer"].Value;
                                     var value = filter.Groups["value"].Value;
-                                    any = new AnyNode(t, comparer, value, this);
+                                    any = new AnyNode(vp, comparer, value, this.AddError);
 
                                 }
                                 stack.Peek().Nodes.Add(any);
                                 PushBlock(any.AnyBlock);
 
-                                DeclareVariable(t);
+                                DeclareVariable(vp);
                                 break;
                             }
                         case "notany":
@@ -344,12 +214,12 @@ namespace Signum.Engine.Mailing
                             }
                         case "foreach":
                             {
-                                var t = TryParseToken(token, dec, SubTokensOptions.CanElement);
-                                var fn = new ForeachNode(t);
+                                ValueProviderBase vp = TryParseValueProvider(type, token, dec);
+                                var fn = new ForeachNode(vp);
                                 stack.Peek().Nodes.Add(fn);
                                 PushBlock(fn.Block);
 
-                                DeclareVariable(t);
+                                DeclareVariable(vp);
                                 break;
                             }
                         case "endforeach":
@@ -360,23 +230,23 @@ namespace Signum.Engine.Mailing
                         case "if":
                             {
                                 IfNode ifn;
-                                ParsedToken t;
-                                var filter = TokenOperationValueRegex.Match(token);
+                                ValueProviderBase vp;
+                                var filter = TemplateUtils.TokenOperationValueRegex.Match(token);
                                 if (!filter.Success)
                                 {
-                                    t = TryParseToken(token, dec, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll);
-                                    ifn = new IfNode(t, this);
+                                    vp = TryParseValueProvider(type, token, dec);
+                                    ifn = new IfNode(vp, this);
                                 }
                                 else
                                 {
-                                    t = TryParseToken(filter.Groups["token"].Value, dec, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll);
+                                    vp = TryParseValueProvider(type, filter.Groups["token"].Value, dec);
                                     var comparer = filter.Groups["comparer"].Value;
                                     var value = filter.Groups["value"].Value;
-                                    ifn = new IfNode(t, comparer, value, this);
+                                    ifn = new IfNode(vp, comparer, value, this.AddError);
                                 }
                                 stack.Peek().Nodes.Add(ifn);
                                 PushBlock(ifn.IfBlock);
-                                DeclareVariable(t);
+                                DeclareVariable(vp);
                                 break;
                             }
                         case "else":
@@ -390,20 +260,26 @@ namespace Signum.Engine.Mailing
                                 PopBlock(typeof(IfNode));
                                 break;
                             }
-                        default:
+                        default :
+                            AddError(false, "'{0}' is deprecated".FormatWith(keyword));
                             break;
                     }
                     index = match.Index + match.Length;
                 }
 
                 if (stack.Count != 1)
-                    AddError(true, "Last block is not closed: {0}".Formato(stack.Peek()));
+                    AddError(true, "Last block is not closed: {0}".FormatWith(stack.Peek()));
 
                 var lastM = matches.Cast<Match>().LastOrDefault();
                 if (lastM != null && lastM.Index + lastM.Length < text.Length)
                     stack.Peek().Nodes.Add(new LiteralNode { Text = text.Substring(lastM.Index + lastM.Length) });
 
                 stack.Pop();
+            }
+
+            public ValueProviderBase TryParseValueProvider(string type, string token, string variable)
+            {
+                return ValueProviderBase.TryParse(type, token, variable, this.modelType, this.qd, this.variables, this.AddError);
             }
         }
 
@@ -416,99 +292,8 @@ namespace Signum.Engine.Mailing
             return node.ToString(); 
         }
 
-        public class SyncronizationContext
-        {
-            public ScopedDictionary<string, ParsedToken> Variables;
-            public Type ModelType;
-            public Replacements Replacements;
-            public StringDistance StringDistance;
-            public QueryDescription QueryDescription;
 
-            internal void SynchronizeToken(ParsedToken parsedToken, string remainingText)
-            {
-                if (parsedToken.QueryToken != null)
-                {
-                    SafeConsole.WriteColor(parsedToken.QueryToken != null ? ConsoleColor.Gray : ConsoleColor.Red, "  " + parsedToken.QueryToken.FullKey());
-                    Console.WriteLine(" " + remainingText);
-                }
-                else
-                {
-                    string tokenString = parsedToken.String;
-
-                    if (tokenString.StartsWith("$"))
-                    {
-                        string v = tokenString.TryBefore('.') ?? tokenString;
-
-                        ParsedToken part;
-                        if (!Variables.TryGetValue(v, out part))
-                            SafeConsole.WriteLineColor(ConsoleColor.Magenta, "Variable '{0}' not found!".Formato(v));
-
-                        if (part != null && part.QueryToken == null)
-                            SafeConsole.WriteLineColor(ConsoleColor.Magenta, "Variable '{0}' is not fixed yet! currently: '{1}'".Formato(v, part.String));
-
-                        var after = tokenString.TryAfter('.');
-
-                        tokenString =
-                            (part == null ? "Unknown" :
-                            part.QueryToken == null ? part.String :
-                            part.QueryToken.FullKey()) + (after == null ? null : ("." + after));
-                    }
-
-                    SafeConsole.WriteColor(ConsoleColor.Red, "  " + tokenString);
-                    Console.WriteLine(" " + remainingText);
-
-                    QueryToken token;
-                    FixTokenResult result = QueryTokenSynchronizer.FixToken(Replacements, tokenString, out token, QueryDescription, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll /*not always*/, remainingText, allowRemoveToken: false);
-                    switch (result)
-                    {
-                        case FixTokenResult.Nothing:
-                        case FixTokenResult.Fix:
-                            parsedToken.QueryToken = token;
-                            parsedToken.String = token.FullKey();
-                            break;
-                        case FixTokenResult.SkipEntity:
-                        case FixTokenResult.RemoveToken:
-                            throw new TemplateSyncException(result);
-                    }
-                }
-            }
-
-            public void SynchronizeValue(ParsedToken Token, ref string value, bool isList)
-            {
-                string val = value;
-                FixTokenResult result = QueryTokenSynchronizer.FixValue(Replacements, Token.QueryToken.Type, ref val, allowRemoveToken: false, isList: isList);
-                switch (result)
-                {
-                    case FixTokenResult.Fix:
-                    case FixTokenResult.Nothing:
-                        value = val;
-                        break;
-                    case FixTokenResult.SkipEntity:
-                    case FixTokenResult.RemoveToken:
-                        throw new TemplateSyncException(result);
-                }
-            }
-
-            public IDisposable NewScope()
-            {
-                Variables = new ScopedDictionary<string, ParsedToken>(Variables);
-
-                return new Disposable(() => Variables = Variables.Previous);
-            }
-        }
-
-        public class TemplateSyncException : Exception
-        {
-            public FixTokenResult Result;
-
-            public TemplateSyncException(FixTokenResult result)
-            {
-                this.Result = result;
-            }
-        }
-
-
-        internal static SqlPreCommand ProcessEmailTemplate( Replacements replacements, Table table, EmailTemplateDN et, StringDistance sd)
+        internal static SqlPreCommand ProcessEmailTemplate( Replacements replacements, Table table, EmailTemplateEntity et, StringDistance sd)
         {
             try
             {
@@ -523,7 +308,7 @@ namespace Signum.Engine.Mailing
 
                 if (et.From != null && et.From.Token != null)
                 {
-                    QueryTokenDN token = et.From.Token;
+                    QueryTokenEntity token = et.From.Token;
                     switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, " From", allowRemoveToken: false))
                     {
                         case FixTokenResult.Nothing: break;
@@ -539,7 +324,7 @@ namespace Signum.Engine.Mailing
                     Console.WriteLine(" Recipients:");
                     foreach (var item in et.Recipients.Where(a => a.Token != null).ToList())
                     {
-                        QueryTokenDN token = item.Token;
+                        QueryTokenEntity token = item.Token;
                         switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, " Recipient"))
                         {
                             case FixTokenResult.Nothing: break;
@@ -552,24 +337,26 @@ namespace Signum.Engine.Mailing
                     }
                 }
 
-                SyncronizationContext sc = new SyncronizationContext
-                {
-                     ModelType = et.SystemEmail.ToType(),
-                     QueryDescription = qd,
-                     Replacements = replacements, 
-                     StringDistance = sd
-                };
-
                 try
                 {
 
                     foreach (var item in et.Messages)
                     {
+                        SyncronizationContext sc = new SyncronizationContext
+                        {
+                            ModelType = et.SystemEmail.ToType(),
+                            QueryDescription = qd,
+                            Replacements = replacements,
+                            StringDistance = sd,
+                            Variables = new ScopedDictionary<string, ValueProviderBase>(null)
+                        };
+
                         item.Subject = Synchronize(item.Subject, sc);
                         item.Text = Synchronize(item.Text, sc);
                     }
 
-                    return table.UpdateSqlSync(et, includeCollections: true);
+                    using (replacements.WithReplacedDatabaseName())
+                        return table.UpdateSqlSync(et, includeCollections: true);
                 }
                 catch (TemplateSyncException ex)
                 {
@@ -579,7 +366,7 @@ namespace Signum.Engine.Mailing
                     if (ex.Result == FixTokenResult.DeleteEntity)
                         return table.DeleteSqlSync(et);
 
-                    throw new InvalidOperationException("Unexcpected {0}".Formato(ex.Result));
+                    throw new InvalidOperationException("Unexcpected {0}".FormatWith(ex.Result));
                 }
                 finally
                 {
@@ -588,7 +375,7 @@ namespace Signum.Engine.Mailing
             }
             catch (Exception e)
             {
-                return new SqlPreCommandSimple("-- Exception in {0}: {1}".Formato(et.BaseToString(), e.Message));
+                return new SqlPreCommandSimple("-- Exception in {0}: {1}".FormatWith(et.BaseToString(), e.Message));
             }
         }
     
@@ -604,13 +391,22 @@ namespace Signum.Engine.Mailing
         //}
     }
 
-    public class EmailTemplateParameters
+    public class EmailTemplateParameters : TemplateParameters
     {
+        public EmailTemplateParameters(IEntity entity, CultureInfo culture, Dictionary<QueryToken, ResultColumn> columns, IEnumerable<ResultRow> rows): 
+              base(entity, culture, columns, rows)
+        { }
+
         public StringBuilder StringBuilder = new StringBuilder();
         public bool IsHtml;
-        public CultureInfo CultureInfo;
-        public IIdentifiable Entity;
         public ISystemEmail SystemEmail;
-        public Dictionary<QueryToken, ResultColumn> Columns;
+
+        public override object GetModel()
+        {
+            if (SystemEmail == null)
+                throw new ArgumentException("There is no SystemEmail set");
+
+            return SystemEmail;
+        }
     }
 }

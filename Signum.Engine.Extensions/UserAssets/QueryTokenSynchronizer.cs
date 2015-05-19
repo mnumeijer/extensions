@@ -28,10 +28,10 @@ namespace Signum.Engine.UserAssets
 
             Func<string, string> rep = str =>
             {
-                if (Replacements.AutoRepacement == null)
+                if (Replacements.AutoReplacement == null)
                     return null;
 
-                Replacements.Selection? sel = Replacements.AutoRepacement(str, null);
+                Replacements.Selection? sel = Replacements.AutoReplacement(str, null);
 
                 if (sel == null || sel.Value.NewValue == null)
                     return null;
@@ -92,9 +92,9 @@ namespace Signum.Engine.UserAssets
                     }
 
 
-                    if (Replacements.AutoRepacement != null)
+                    if (Replacements.AutoReplacement != null)
                     {
-                        Replacements.Selection? sel = Replacements.AutoRepacement(part, result.SubTokens(qd, options).Select(a => a.Key).ToList());
+                        Replacements.Selection? sel = Replacements.AutoReplacement(part, result.SubTokens(qd, options).Select(a => a.Key).ToList());
 
                         if (sel != null && sel.Value.NewValue != null)
                         {
@@ -199,9 +199,9 @@ namespace Signum.Engine.UserAssets
                 }
             }
 
-            if (Replacements.AutoRepacement != null)
+            if (Replacements.AutoReplacement != null)
             {
-                Replacements.Selection? sel = Replacements.AutoRepacement(valueString, null);
+                Replacements.Selection? sel = Replacements.AutoReplacement(valueString, null);
 
                 if (sel != null && sel.Value.NewValue != null)
                 {
@@ -210,7 +210,7 @@ namespace Signum.Engine.UserAssets
                 }
             }
 
-            SafeConsole.WriteLineColor(ConsoleColor.White, "Value '{0}' not convertible to {1}.".Formato(valueString, type.TypeName()));
+            SafeConsole.WriteLineColor(ConsoleColor.White, "Value '{0}' not convertible to {1}.".FormatWith(valueString, type.TypeName()));
             SafeConsole.WriteLineColor(ConsoleColor.Yellow, "- s: Skip entity");
             if (allowRemoveToken)
                 SafeConsole.WriteLineColor(ConsoleColor.DarkRed, "- r: Remove token");
@@ -242,15 +242,15 @@ namespace Signum.Engine.UserAssets
         {
             return replacements.GetOrCreate("cleanNames").GetOrCreate(type, () =>
             {
-                if (Replacements.AutoRepacement != null)
+                if (Replacements.AutoReplacement != null)
                 {
-                    Replacements.Selection? sel = Replacements.AutoRepacement(type, null);
+                    Replacements.Selection? sel = Replacements.AutoReplacement(type, null);
 
                     if (sel != null && sel.Value.NewValue != null)
                         return sel.Value.NewValue;
                 }
 
-                Console.WriteLine("Type {0} has been renamed?".Formato(type));
+                Console.WriteLine("Type {0} has been renamed?".FormatWith(type));
 
                 int startingIndex = 0;
                 StringDistance sd = new StringDistance();
@@ -259,7 +259,7 @@ namespace Signum.Engine.UserAssets
                 int maxElements = Console.LargestWindowHeight - 11;
 
                 list.Skip(startingIndex).Take(maxElements)
-                           .Select((s, i) => "- {1,2}: {2} ".Formato(i + startingIndex == 0 ? ">" : " ", i + startingIndex, s)).ToConsole();
+                           .Select((s, i) => "- {1,2}: {2} ".FormatWith(i + startingIndex == 0 ? ">" : " ", i + startingIndex, s)).ToConsole();
                 Console.WriteLine();
                 SafeConsole.WriteLineColor(ConsoleColor.White, "- n: None");
 
@@ -296,7 +296,7 @@ namespace Signum.Engine.UserAssets
             });
         }
 
-        public static FixTokenResult FixToken(Replacements replacements, ref QueryTokenDN token, QueryDescription qd, SubTokensOptions options, string remainingText, bool allowRemoveToken = true)
+        public static FixTokenResult FixToken(Replacements replacements, ref QueryTokenEntity token, QueryDescription qd, SubTokensOptions options, string remainingText, bool allowRemoveToken = true)
         {
             SafeConsole.WriteColor(token.ParseException == null ? ConsoleColor.Gray : ConsoleColor.Red, "  " + token.TokenString);
             Console.WriteLine(" " + remainingText);
@@ -308,7 +308,7 @@ namespace Signum.Engine.UserAssets
             FixTokenResult result = FixToken(replacements, token.TokenString, out resultToken, qd, options, remainingText, allowRemoveToken);
 
             if (result == FixTokenResult.Fix)
-                token = new QueryTokenDN(resultToken);
+                token = new QueryTokenEntity(resultToken);
 
             return result;
         }
@@ -388,7 +388,7 @@ namespace Signum.Engine.UserAssets
                 int maxElements = Console.LargestWindowHeight - 11;
 
                 subTokens.Skip(startingIndex).Take(maxElements)
-                    .Select((s, i) => "- {1,2}: {2} ".Formato(i + " ", i + startingIndex, ((isRoot && s.Parent != null) ? "-" : "") + s.Key)).ToConsole();
+                    .Select((s, i) => "- {1,2}: {2} ".FormatWith(i + " ", i + startingIndex, ((isRoot && s.Parent != null) ? "-" : "") + s.Key)).ToConsole();
                 Console.WriteLine();
 
                 int remaining = subTokens.Count - startingIndex - maxElements;

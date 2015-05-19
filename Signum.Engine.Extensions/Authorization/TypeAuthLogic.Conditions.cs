@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,7 +17,6 @@ using Signum.Entities.Reflection;
 using Signum.Utilities.Reflection;
 using Signum.Utilities.ExpressionTrees;
 using Signum.Engine.Linq;
-using Signum.Engine.Exceptions;
 using System.Data.SqlClient;
 using System.Xml.Linq;
 
@@ -33,22 +32,27 @@ namespace Signum.Engine.Authorization
             return new Disposable(() => queryFilterDisabled.Value = false);
         }
 
-        static readonly Variable<bool> saveDisabled = Statics.ThreadVariable<bool>("saveDisabled");
-        public static IDisposable DisableSave()
+        public static bool InSave
         {
-            if (saveDisabled.Value) return null;
-            saveDisabled.Value = true;
-            return new Disposable(() => saveDisabled.Value = false);
+            get { return inSave.Value; }
+        }
+
+        static readonly Variable<bool> inSave = Statics.ThreadVariable<bool>("inSave");
+        static IDisposable OnInSave()
+        {
+            if (inSave.Value) return null;
+            inSave.Value = true;
+            return new Disposable(() => inSave.Value = false);
         }
 
         const string CreatedKey = "Created";
         const string ModifiedKey = "Modified";
 
-        static void Schema_Saving_Instance(IdentifiableEntity ident)
+        static void Schema_Saving_Instance(Entity ident)
         {
             if (ident.IsNew)
             {
-                var created = (List<IdentifiableEntity>)Transaction.UserData.GetOrCreate(CreatedKey, () => new List<IdentifiableEntity>());
+                var created = (List<Entity>)Transaction.UserData.GetOrCreate(CreatedKey, () => new List<Entity>());
                 if (created.Contains(ident))
                     return;
 
@@ -60,7 +64,7 @@ namespace Signum.Engine.Authorization
                    IsCreatedOrModified(Transaction.UserData, ident))
                     return;
 
-                var modified = (List<IdentifiableEntity>)Transaction.UserData.GetOrCreate(ModifiedKey, () => new List<IdentifiableEntity>());
+                var modified = (List<Entity>)Transaction.UserData.GetOrCreate(ModifiedKey, () => new List<Entity>());
 
                 modified.Add(ident);
             }
@@ -69,71 +73,74 @@ namespace Signum.Engine.Authorization
             Transaction.PreRealCommit += Transaction_PreRealCommit;
         }
 
-        private static bool IsCreatedOrModified(Dictionary<string, object> dictionary, IdentifiableEntity ident)
+        private static bool IsCreatedOrModified(Dictionary<string, object> dictionary, Entity ident)
         {
-            var modified = (List<IdentifiableEntity>)dictionary.TryGetC(ModifiedKey);
+            var modified = (List<Entity>)dictionary.TryGetC(ModifiedKey);
             if (modified != null && modified.Contains(ident))
                 return true;
 
-            var created = (List<IdentifiableEntity>)dictionary.TryGetC(CreatedKey);
+            var created = (List<Entity>)dictionary.TryGetC(CreatedKey);
             if (created != null && created.Contains(ident))
                 return true;
 
             return false;
         }
 
-        public static void RemovePreRealCommitChecking(IdentifiableEntity entity)
+        public static void RemovePreRealCommitChecking(Entity entity)
         {
-            var created = (List<IdentifiableEntity>)Transaction.UserData.TryGetC(CreatedKey);
+            var created = (List<Entity>)Transaction.UserData.TryGetC(CreatedKey);
             if (created != null && created.Contains(entity))
                 created.Remove(entity);
 
-            var modified = (List<IdentifiableEntity>)Transaction.UserData.TryGetC(ModifiedKey);
+            var modified = (List<Entity>)Transaction.UserData.TryGetC(ModifiedKey);
             if (modified != null && modified.Contains(entity))
                 modified.Remove(entity); 
         }
 
         static void Transaction_PreRealCommit(Dictionary<string, object> dic)
         {
-            var modified = (List<IdentifiableEntity>)dic.TryGetC(ModifiedKey);
-
-            if (modified.HasItems())
+            using (OnInSave())
             {
-                var groups = modified.GroupBy(e => e.GetType(), e => e.Id);
+                var modified = (List<Entity>)dic.TryGetC(ModifiedKey);
 
-                //Assert before
-                using (Transaction tr = Transaction.ForceNew())
+                if (modified.HasItems())
                 {
+                    var groups = modified.GroupBy(e => e.GetType(), e => e.Id);
+
+                    //Assert before
+                    using (Transaction tr = Transaction.ForceNew())
+                    {
+                        foreach (var gr in groups)
+                            miAssertAllowed.GetInvoker(gr.Key)(gr.ToArray(), TypeAllowedBasic.Modify);
+
+                        tr.Commit();
+                    }
+
+                    //Assert after
                     foreach (var gr in groups)
+                    {
                         miAssertAllowed.GetInvoker(gr.Key)(gr.ToArray(), TypeAllowedBasic.Modify);
-
-                    tr.Commit();
+                    }
                 }
 
-                //Assert after
-                foreach (var gr in groups)
+                var created = (List<Entity>)Transaction.UserData.TryGetC(CreatedKey);
+
+                if (created.HasItems())
                 {
-                    miAssertAllowed.GetInvoker(gr.Key)(gr.ToArray(), TypeAllowedBasic.Modify);
+                    var groups = created.GroupBy(e => e.GetType(), e => e.Id);
+
+                    //Assert after
+                    foreach (var gr in groups)
+                        miAssertAllowed.GetInvoker(gr.Key)(gr.ToArray(), TypeAllowedBasic.Create);
                 }
-            }
-
-            var created = (List<IdentifiableEntity>)Transaction.UserData.TryGetC(CreatedKey);
-
-            if (created.HasItems())
-            {
-                var groups = created.GroupBy(e => e.GetType(), e => e.Id);
-
-                //Assert after
-                foreach (var gr in groups)
-                    miAssertAllowed.GetInvoker(gr.Key)(gr.ToArray(), TypeAllowedBasic.Create);
             }
         }
 
 
-        static GenericInvoker<Action<int[], TypeAllowedBasic>> miAssertAllowed = 
-            new GenericInvoker<Action<int[], TypeAllowedBasic>>((a, tab) => AssertAllowed<IdentifiableEntity>(a, tab));
-        static void AssertAllowed<T>(int[] requested, TypeAllowedBasic typeAllowed)
-            where T : IdentifiableEntity
+        static GenericInvoker<Action<PrimaryKey[], TypeAllowedBasic>> miAssertAllowed =
+            new GenericInvoker<Action<PrimaryKey[], TypeAllowedBasic>>((a, tab) => AssertAllowed<Entity>(a, tab));
+        static void AssertAllowed<T>(PrimaryKey[] requested, TypeAllowedBasic typeAllowed)
+            where T : Entity
         {
             using (DisableQueryFilter())
             {
@@ -146,69 +153,69 @@ namespace Signum.Engine.Authorization
                 if (found.Length != requested.Length)
                     throw new EntityNotFoundException(typeof(T), requested.Except(found.Select(a => a.Id)).ToArray());
 
-                int[] notFound = found.Where(a => !a.Allowed).Select(a => a.Id).ToArray();
+                PrimaryKey[] notFound = found.Where(a => !a.Allowed).Select(a => a.Id).ToArray();
                 if (notFound.Any())
                 {
                     List<DebugData> debugInfo = Database.Query<T>().Where(a => notFound.Contains(a.Id))
                         .Select(a => a.IsAllowedForDebug(typeAllowed, ExecutionMode.InUserInterface)).ToList();
 
-                    string details = debugInfo.ToString(a => "  '{0}'  because {1}".Formato(a.Lite, a.Error), "\r\n");
+                    string details = debugInfo.ToString(a => "  '{0}'  because {1}".FormatWith(a.Lite, a.Error), "\r\n");
 
-                    throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().Formato(
+                    throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().FormatWith(
                         typeAllowed.NiceToString(),
                         notFound.Length == 1 ? typeof(T).NiceName() : typeof(T).NicePluralName(), notFound.CommaAnd()) + "\r\n" + details);
                 }
             }
         }
 
-        public static void AssertAllowed(this IIdentifiable ident, TypeAllowedBasic allowed)
+        public static void AssertAllowed(this IEntity ident, TypeAllowedBasic allowed)
         {
             AssertAllowed(ident, allowed, ExecutionMode.InUserInterface);
         }
 
-        public static void AssertAllowed(this IIdentifiable ident, TypeAllowedBasic allowed, bool inUserInterface)
+        public static void AssertAllowed(this IEntity ident, TypeAllowedBasic allowed, bool inUserInterface)
         {
             if (!ident.IsAllowedFor(allowed, inUserInterface))
-                throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().Formato(allowed.NiceToString().ToLower(), ident.GetType().NiceName(), ident.Id));
+                throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().FormatWith(allowed.NiceToString().ToLower(), ident.GetType().NiceName(), ident.Id));
         }
 
-        public static void AssertAllowed(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed)
+        public static void AssertAllowed(this Lite<IEntity> lite, TypeAllowedBasic allowed)
         {
             AssertAllowed(lite, allowed, ExecutionMode.InUserInterface);
         }
 
-        public static void AssertAllowed(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed, bool inUserInterface)
+        public static void AssertAllowed(this Lite<IEntity> lite, TypeAllowedBasic allowed, bool inUserInterface)
         {
             if (lite.IdOrNull == null)
                 AssertAllowed(lite.UntypedEntityOrNull, allowed, inUserInterface);
 
             if (!lite.IsAllowedFor(allowed, inUserInterface))
-                throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().Formato(allowed.NiceToString().ToLower(), lite.EntityType.NiceName(), lite.Id));
+                throw new UnauthorizedAccessException(AuthMessage.NotAuthorizedTo0The1WithId2.NiceToString().FormatWith(allowed.NiceToString().ToLower(), lite.EntityType.NiceName(), lite.Id));
         }
 
         [MethodExpander(typeof(IsAllowedForExpander))]
-        public static bool IsAllowedFor(this IIdentifiable ident, TypeAllowedBasic allowed)
+        public static bool IsAllowedFor(this IEntity ident, TypeAllowedBasic allowed)
         {
             return IsAllowedFor(ident, allowed, ExecutionMode.InUserInterface);
         }
 
         [MethodExpander(typeof(IsAllowedForExpander))]
-        public static bool IsAllowedFor(this IIdentifiable ident, TypeAllowedBasic allowed, bool inUserInterface)
+        public static bool IsAllowedFor(this IEntity ident, TypeAllowedBasic allowed, bool inUserInterface)
         {
             return miIsAllowedForEntity.GetInvoker(ident.GetType()).Invoke(ident, allowed, inUserInterface);
         }
 
-        static GenericInvoker<Func<IIdentifiable, TypeAllowedBasic, bool, bool>> miIsAllowedForEntity
-            = new GenericInvoker<Func<IIdentifiable, TypeAllowedBasic, bool, bool>>((ie, tab, ec) => IsAllowedFor<IdentifiableEntity>((IdentifiableEntity)ie, tab, ec));
+        static GenericInvoker<Func<IEntity, TypeAllowedBasic, bool, bool>> miIsAllowedForEntity
+            = new GenericInvoker<Func<IEntity, TypeAllowedBasic, bool, bool>>((ie, tab, ec) => IsAllowedFor<Entity>((Entity)ie, tab, ec));
         [MethodExpander(typeof(IsAllowedForExpander))]
         static bool IsAllowedFor<T>(this T entity, TypeAllowedBasic allowed, bool inUserInterface)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             if (!AuthLogic.IsEnabled)
                 return true;
 
             if (entity.IsNew)
-                throw new InvalidOperationException("The entity {0} is new".Formato(entity));
+                throw new InvalidOperationException("The entity {0} is new".FormatWith(entity));
 
             var tac = GetAllowed(entity.GetType());
 
@@ -230,7 +237,7 @@ namespace Signum.Engine.Authorization
                 return entity.InDB().WhereIsAllowedFor(allowed, inUserInterface).Any();
         }
 
-        private static Func<T, bool> IsAllowedInMemory<T>(TypeAllowedAndConditions tac, TypeAllowedBasic allowed, bool inUserInterface) where T : IdentifiableEntity
+        private static Func<T, bool> IsAllowedInMemory<T>(TypeAllowedAndConditions tac, TypeAllowedBasic allowed, bool inUserInterface) where T : Entity
         {
             if (tac.Conditions.Any(c => TypeConditionLogic.GetInMemoryCondition<T>(c.TypeCondition) == null))
                 return null;
@@ -250,22 +257,22 @@ namespace Signum.Engine.Authorization
         }
 
         [MethodExpander(typeof(IsAllowedForExpander))]
-        public static bool IsAllowedFor(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed)
+        public static bool IsAllowedFor(this Lite<IEntity> lite, TypeAllowedBasic allowed)
         {
             return IsAllowedFor(lite, allowed, ExecutionMode.InUserInterface);
         }
 
         [MethodExpander(typeof(IsAllowedForExpander))]
-        public static bool IsAllowedFor(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed, bool inUserInterface)
+        public static bool IsAllowedFor(this Lite<IEntity> lite, TypeAllowedBasic allowed, bool inUserInterface)
         {
             return miIsAllowedForLite.GetInvoker(lite.EntityType).Invoke(lite, allowed, inUserInterface);
         }
 
-        static GenericInvoker<Func<Lite<IIdentifiable>, TypeAllowedBasic, bool, bool>> miIsAllowedForLite =
-            new GenericInvoker<Func<Lite<IIdentifiable>, TypeAllowedBasic, bool, bool>>((l, tab, ec) => IsAllowedFor<IdentifiableEntity>(l, tab, ec));
+        static GenericInvoker<Func<Lite<IEntity>, TypeAllowedBasic, bool, bool>> miIsAllowedForLite =
+            new GenericInvoker<Func<Lite<IEntity>, TypeAllowedBasic, bool, bool>>((l, tab, ec) => IsAllowedFor<Entity>(l, tab, ec));
         [MethodExpander(typeof(IsAllowedForExpander))]
-        static bool IsAllowedFor<T>(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed, bool inUserInterface)
-            where T : IdentifiableEntity
+        static bool IsAllowedFor<T>(this Lite<IEntity> lite, TypeAllowedBasic allowed, bool inUserInterface)
+            where T : Entity
         {
             if (!AuthLogic.IsEnabled)
                 return true;
@@ -289,38 +296,38 @@ namespace Signum.Engine.Authorization
         }
 
         [MethodExpander(typeof(IsAllowedForDebugExpander))]
-        public static DebugData IsAllowedForDebug(this IIdentifiable ident, TypeAllowedBasic allowed, bool inUserInterface)
+        public static DebugData IsAllowedForDebug(this IEntity ident, TypeAllowedBasic allowed, bool inUserInterface)
         {
-            return miIsAllowedForDebugEntity.GetInvoker(ident.GetType()).Invoke((IdentifiableEntity)ident, allowed, inUserInterface);
+            return miIsAllowedForDebugEntity.GetInvoker(ident.GetType()).Invoke((Entity)ident, allowed, inUserInterface);
         }
 
-        static GenericInvoker<Func<IIdentifiable, TypeAllowedBasic, bool, DebugData>> miIsAllowedForDebugEntity =
-            new GenericInvoker<Func<IIdentifiable, TypeAllowedBasic, bool, DebugData>>((ii, tab, ec) => IsAllowedForDebug<IdentifiableEntity>((IdentifiableEntity)ii, tab, ec));
+        static GenericInvoker<Func<IEntity, TypeAllowedBasic, bool, DebugData>> miIsAllowedForDebugEntity =
+            new GenericInvoker<Func<IEntity, TypeAllowedBasic, bool, DebugData>>((ii, tab, ec) => IsAllowedForDebug<Entity>((Entity)ii, tab, ec));
         [MethodExpander(typeof(IsAllowedForDebugExpander))]
         static DebugData IsAllowedForDebug<T>(this T entity, TypeAllowedBasic allowed, bool inUserInterface)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             if (!AuthLogic.IsEnabled)
                 return null;
 
             if (entity.IsNew)
-                throw new InvalidOperationException("The entity {0} is new".Formato(entity));
+                throw new InvalidOperationException("The entity {0} is new".FormatWith(entity));
 
             using (DisableQueryFilter())
                 return entity.InDB().Select(e => e.IsAllowedForDebug(allowed, inUserInterface)).SingleEx();
         } 
 
         [MethodExpander(typeof(IsAllowedForDebugExpander))]
-        public static DebugData IsAllowedForDebug(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed, bool inUserInterface)
+        public static DebugData IsAllowedForDebug(this Lite<IEntity> lite, TypeAllowedBasic allowed, bool inUserInterface)
         {
             return miIsAllowedForDebugLite.GetInvoker(lite.EntityType).Invoke(lite, allowed, inUserInterface);
         }
 
-        static GenericInvoker<Func<Lite<IIdentifiable>, TypeAllowedBasic, bool, DebugData>> miIsAllowedForDebugLite =
-            new GenericInvoker<Func<Lite<IIdentifiable>, TypeAllowedBasic, bool, DebugData>>((l, tab, ec) => IsAllowedForDebug<IdentifiableEntity>(l, tab, ec));
+        static GenericInvoker<Func<Lite<IEntity>, TypeAllowedBasic, bool, DebugData>> miIsAllowedForDebugLite =
+            new GenericInvoker<Func<Lite<IEntity>, TypeAllowedBasic, bool, DebugData>>((l, tab, ec) => IsAllowedForDebug<Entity>(l, tab, ec));
         [MethodExpander(typeof(IsAllowedForDebugExpander))]
-        static DebugData IsAllowedForDebug<T>(this Lite<IIdentifiable> lite, TypeAllowedBasic allowed, bool inUserInterface)
-             where T : IdentifiableEntity
+        static DebugData IsAllowedForDebug<T>(this Lite<IEntity> lite, TypeAllowedBasic allowed, bool inUserInterface)
+             where T : Entity
         {
             if (!AuthLogic.IsEnabled)
                 return null;
@@ -345,7 +352,7 @@ namespace Signum.Engine.Authorization
 
 
         static FilterQueryResult<T> TypeAuthLogic_FilterQuery<T>() 
-          where T : IdentifiableEntity
+          where T : Entity
         {
             if (queryFilterDisabled.Value)
                 return null;
@@ -375,7 +382,7 @@ namespace Signum.Engine.Authorization
 
         [MethodExpander(typeof(WhereAllowedExpander))]
         public static IQueryable<T> WhereAllowed<T>(this IQueryable<T> query)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             if (ExecutionMode.InGlobal || !AuthLogic.IsEnabled)
                 return query;
@@ -387,12 +394,12 @@ namespace Signum.Engine.Authorization
             return WhereIsAllowedFor<T>(query, TypeAllowedBasic.Read, ui);
         }
 
-        private static void AssertMinimum<T>(bool ui) where T : IdentifiableEntity
+        private static void AssertMinimum<T>(bool ui) where T : Entity
         {
             var allowed = GetAllowed(typeof(T));
             var max = ui ? allowed.MaxUI() : allowed.MaxDB();
             if (max < TypeAllowedBasic.Read)
-                throw new UnauthorizedAccessException("Type {0} is not authorized{1}{2}".Formato(typeof(T).Name,
+                throw new UnauthorizedAccessException("Type {0} is not authorized{1}{2}".FormatWith(typeof(T).Name,
                     ui ? " in user interface" : null,
                     allowed.Conditions.Any() ? " for any condition" : null));
         }
@@ -400,7 +407,7 @@ namespace Signum.Engine.Authorization
 
         [MethodExpander(typeof(WhereIsAllowedForExpander))]
         public static IQueryable<T> WhereIsAllowedFor<T>(this IQueryable<T> query, TypeAllowedBasic allowed, bool inUserInterface)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             ParameterExpression e = Expression.Parameter(typeof(T), "e");
 
@@ -426,9 +433,9 @@ namespace Signum.Engine.Authorization
                 return miCallWhereAllowed.GetInvoker(mi.GetGenericArguments()).Invoke(arguments[0]);
             }
 
-            static GenericInvoker<Func<Expression, Expression>> miCallWhereAllowed = new GenericInvoker<Func<Expression, Expression>>(exp => CallWhereAllowed<TypeDN>(exp));
+            static GenericInvoker<Func<Expression, Expression>> miCallWhereAllowed = new GenericInvoker<Func<Expression, Expression>>(exp => CallWhereAllowed<TypeEntity>(exp));
             static Expression CallWhereAllowed<T>(Expression expression)
-                where T : IdentifiableEntity
+                where T : Entity
             {
                 IQueryable<T> query = new Query<T>(DbQueryProvider.Single, expression);
                 IQueryable<T> result = WhereAllowed(query);
@@ -447,9 +454,9 @@ namespace Signum.Engine.Authorization
             }
 
             static GenericInvoker<Func<Expression, TypeAllowedBasic, bool, Expression>> miCallWhereIsAllowedFor =
-                new GenericInvoker<Func<Expression, TypeAllowedBasic, bool, Expression>>((ex, tab, ui) => CallWhereIsAllowedFor<TypeDN>(ex, tab, ui));
+                new GenericInvoker<Func<Expression, TypeAllowedBasic, bool, Expression>>((ex, tab, ui) => CallWhereIsAllowedFor<TypeEntity>(ex, tab, ui));
             static Expression CallWhereIsAllowedFor<T>(Expression expression, TypeAllowedBasic allowed, bool inUserInterface)
-                where T : IdentifiableEntity
+                where T : Entity
             {
                 IQueryable<T> query = new Query<T>(DbQueryProvider.Single, expression);
                 IQueryable<T> result = WhereIsAllowedFor(query, allowed, inUserInterface);
@@ -483,7 +490,7 @@ namespace Signum.Engine.Authorization
 
         static ConstructorInfo ciDebugData = ReflectionTools.GetConstuctorInfo(() => new DebugData(null, TypeAllowedBasic.Create, true, TypeAllowed.Create,  null));
         static ConstructorInfo ciGroupDebugData = ReflectionTools.GetConstuctorInfo(() => new ConditionDebugData(null, true, TypeAllowed.Create));
-        static MethodInfo miToLite = ReflectionTools.GetMethodInfo((IdentifiableEntity a) => a.ToLite()).GetGenericMethodDefinition();
+        static MethodInfo miToLite = ReflectionTools.GetMethodInfo((Entity a) => a.ToLite()).GetGenericMethodDefinition();
 
         internal static Expression IsAllowedExpressionDebug(Expression entity, TypeAllowedBasic requested, bool inUserInterface)
         {
@@ -511,7 +518,7 @@ namespace Signum.Engine.Authorization
 
         public class DebugData
         {
-            public DebugData(Lite<IIdentifiable> lite, TypeAllowedBasic requested, bool userInterface, TypeAllowed fallback, List<ConditionDebugData> groups)
+            public DebugData(Lite<IEntity> lite, TypeAllowedBasic requested, bool userInterface, TypeAllowed fallback, List<ConditionDebugData> groups)
             {
                 this.Lite = lite;
                 this.Requested = requested;
@@ -520,7 +527,7 @@ namespace Signum.Engine.Authorization
                 this.Conditions = groups;
             }
             
-            public Lite<IIdentifiable> Lite { get; private set; }
+            public Lite<IEntity> Lite { get; private set; }
             public TypeAllowedBasic Requested { get; private set; }
             public TypeAllowed Fallback { get; private set; }
             public bool UserInterface { get; private set; }
@@ -549,11 +556,11 @@ namespace Signum.Engine.Authorization
                     {
                         if (cond.InGroup)
                             return Requested <= cond.Allowed.Get(UserInterface) ? null :
-                                "is a {0} that belongs to condition {1} that is {2} (less than {3})".Formato(Lite.EntityType.TypeName(), cond.TypeCondition, cond.Allowed.Get(UserInterface), Requested);
+                                "is a {0} that belongs to condition {1} that is {2} (less than {3})".FormatWith(Lite.EntityType.TypeName(), cond.TypeCondition, cond.Allowed.Get(UserInterface), Requested);
                     }
 
                     return Requested <= Fallback.Get(UserInterface) ? null :
-                        "is a {0} but does not belong to any condition and the base value is {1} (less than {2})".Formato(Lite.EntityType.TypeName(), Fallback.Get(UserInterface), Requested);
+                        "is a {0} but does not belong to any condition and the base value is {1} (less than {2})".FormatWith(Lite.EntityType.TypeName(), Fallback.Get(UserInterface), Requested);
                 }
             }
         }
@@ -591,7 +598,7 @@ namespace Signum.Engine.Authorization
                 }
             }
 
-            public override Lite<IdentifiableEntity> ExecuteUniqueEntity(UniqueEntityRequest request)
+            public override Lite<Entity> ExecuteUniqueEntity(UniqueEntityRequest request)
             {
                 using (TypeAuthLogic.DisableQueryFilter())
                 {
@@ -608,14 +615,14 @@ namespace Signum.Engine.Authorization
             }
         }
 
-        public static RuleTypeDN ToRuleType(this TypeAllowedAndConditions allowed, Lite<RoleDN> role, TypeDN resource)
+        public static RuleTypeEntity ToRuleType(this TypeAllowedAndConditions allowed, Lite<RoleEntity> role, TypeEntity resource)
         {
-            return new RuleTypeDN
+            return new RuleTypeEntity
             {
                 Role = role,
                 Resource = resource,
                 Allowed = allowed.Fallback,
-                Conditions = allowed.Conditions.Select(a => new RuleTypeConditionDN
+                Conditions = allowed.Conditions.Select(a => new RuleTypeConditionEntity
                 {
                     Allowed = a.Allowed,
                     Condition = a.TypeCondition
@@ -623,15 +630,15 @@ namespace Signum.Engine.Authorization
             };
         }
 
-        public static TypeAllowedAndConditions ToTypeAllowedAndConditions(this RuleTypeDN rule)
+        public static TypeAllowedAndConditions ToTypeAllowedAndConditions(this RuleTypeEntity rule)
         {
             return new TypeAllowedAndConditions(rule.Allowed,
                 rule.Conditions.Select(c => new TypeConditionRule(c.Condition, c.Allowed)).ToReadOnly());
         }
 
-        static SqlPreCommand Schema_Synchronizing(Replacements arg)
+        static SqlPreCommand Schema_Synchronizing(Replacements rep)
         {
-            var conds = (from rt in Database.Query<RuleTypeDN>()
+            var conds = (from rt in Database.Query<RuleTypeEntity>()
                          from c in rt.Conditions
                          select new { rt.Resource, c.Condition, rt.Role }).ToList();
 
@@ -639,10 +646,11 @@ namespace Signum.Engine.Authorization
                 .Where(c => !TypeConditionLogic.IsDefined(c.Key.Resource.ToType(), c.Key.Condition))
                 .ToList();
 
-            return errors.Select(a => Administrator.UnsafeDeletePreCommand(Database.MListQuery((RuleTypeDN rt) => rt.Conditions)
-                .Where(mle => mle.Element.Condition.Is(a.Key.Condition) && mle.Parent.Resource.Is(a.Key.Resource)))
-                .AddComment("TypeCondition {0} not defined for {1} (roles {2})".Formato(a.Key.Condition, a.Key.Resource, a.ToString(", "))))
-                .Combine(Spacing.Double);
+            using (rep.WithReplacedDatabaseName())
+                return errors.Select(a => Administrator.UnsafeDeletePreCommand(Database.MListQuery((RuleTypeEntity rt) => rt.Conditions)
+                    .Where(mle => mle.Element.Condition.Is(a.Key.Condition) && mle.Parent.Resource.Is(a.Key.Resource)))
+                    .AddComment("TypeCondition {0} not defined for {1} (roles {2})".FormatWith(a.Key.Condition, a.Key.Resource, a.ToString(", "))))
+                    .Combine(Spacing.Double);
         }
     }
 }

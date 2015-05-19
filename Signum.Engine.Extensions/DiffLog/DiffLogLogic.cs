@@ -16,26 +16,26 @@ namespace Signum.Engine.DiffLog
 {
     public static class DiffLogLogic
     {
-        public static Polymorphic<Func<IOperation, bool>> Types = new Polymorphic<Func<IOperation, bool>>(minimumType: typeof(IdentifiableEntity)); 
+        public static Polymorphic<Func<IOperation, bool>> Types = new Polymorphic<Func<IOperation, bool>>(minimumType: typeof(Entity)); 
 
         public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
-                MixinDeclarations.AssertDeclared(typeof(OperationLogDN), typeof(DiffLogMixin));
+                MixinDeclarations.AssertDeclared(typeof(OperationLogEntity), typeof(DiffLogMixin));
 
                 OperationLogic.SurroundOperation += OperationLogic_SurroundOperation;
 
-                RegisterGraph<IdentifiableEntity>(oper => true);
+                RegisterGraph<Entity>(oper => true);
             }
         }
 
-        public static void RegisterGraph<T>(Func<IOperation, bool> func) where T : IdentifiableEntity
+        public static void RegisterGraph<T>(Func<IOperation, bool> func) where T : Entity
         {
             Types.SetDefinition(typeof(T), func);
         }
 
-        static IDisposable OperationLogic_SurroundOperation(IOperation operation, OperationLogDN log, IdentifiableEntity entity, object[] args)
+        static IDisposable OperationLogic_SurroundOperation(IOperation operation, OperationLogEntity log, Entity entity, object[] args)
         {
             var type = operation.OperationType == OperationType.Execute && operation.OperationType == OperationType.Delete ? entity.GetType() : null;
 
@@ -64,17 +64,17 @@ namespace Signum.Engine.DiffLog
             });
         }
 
-        private static IdentifiableEntity RetrieveFresh(IdentifiableEntity entity)
+        private static Entity RetrieveFresh(Entity entity)
         {
             using (new EntityCache(EntityCacheType.ForceNew))
                 return entity.ToLite().Retrieve();
         }
 
-        public static MinMax<OperationLogDN> OperationLogNextPrev(OperationLogDN log)
+        public static MinMax<OperationLogEntity> OperationLogNextPrev(OperationLogEntity log)
         {
-            var logs = Database.Query<OperationLogDN>().Where(a => a.Exception == null && a.Target == log.Target);
+            var logs = Database.Query<OperationLogEntity>().Where(a => a.Exception == null && a.Target == log.Target);
 
-            return new MinMax<OperationLogDN>(
+            return new MinMax<OperationLogEntity>(
                  log.Mixin<DiffLogMixin>().InitialState == null ? null : logs.Where(a => a.End < log.Start).OrderByDescending(a => a.End).FirstOrDefault(),
                  log.Mixin<DiffLogMixin>().FinalState == null ? null : logs.Where(a => a.Start > log.End).OrderBy(a => a.Start).FirstOrDefault());
         }

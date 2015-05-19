@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using Signum.Utilities;
 
 namespace Signum.Entities.Help
 {
@@ -36,11 +37,11 @@ namespace Signum.Entities.Help
         DateTime,
         [Description("expressed in ")]
         ExpressedIn,
-        [Description("from {0} of the {1} ")]
+        [Description("from {0} of the {1}")]
         From0OfThe1,
         [Description("from many {0}")]
         FromMany0,
-        HelpDocumentation,
+        Help,
         HelpNotLoaded,
         [Description("integer")]
         Integer,
@@ -71,7 +72,90 @@ namespace Signum.Entities.Help
         [Description("value like {0}")]
         ValueLike0,
         [Description("your version")]
-        YourVersion
+        YourVersion,
+        [Description("{0} is the primary key of {1}, of type {2}")]
+        _0IsThePrimaryKeyOf1OfType2,
+        [Description("(in {0})")]
+        In0,
+        Entities,
+        SearchText,
     }
 
+    public enum HelpKindMessage
+    {
+        [Description("His main function is to {0}")]
+        HisMainFunctionIsTo0,
+        [Description("relate other entities")]
+        RelateOtherEntities,
+        [Description("classify other entities")]
+        ClassifyOtherEntities,
+        [Description("store information shared by other entities")]
+        StoreInformationSharedByOtherEntities,
+        [Description("store information on its own")]
+        StoreInformationOnItsOwn,
+        [Description("store part of the information of other entity")]
+        StorePartOfTheInformationOfAnotherEntity,
+        [Description("store parts of information shared by different entities")]
+        StorePartsOfInformationSharedByDifferentEntities,
+
+        [Description(" automatically by the system")]
+        AutomaticallyByTheSystem,
+        [Description(" and are rarely created or modified")]
+        AndIsRarelyCreatedOrModified,
+        [Description(" and are frequently created or modified")]
+        AndAreFrequentlyCreatedOrModified,
+
+    }
+
+    public enum HelpSyntaxMessage
+    {
+        BoldText,
+        ItalicText,
+        UnderlineText,
+        StriketroughText,
+        LinkToEntity,
+        LinkToProperty,
+        LinkToQuery,
+        LinkToOperation,
+        LinkToNamespace,
+        ExernalLink,
+        LinksAllowAnExtraParameterForTheText,
+        Example,
+        UnorderedListItem,
+        OtherItem,
+        OrderedListItem,
+        TitleLevel,
+        Title,
+        Images,
+        Texts,
+        Links,
+        Lists,
+        InsertImage,
+        Options,
+        Edit,
+        Save,
+        Syntax,
+        [Description("Translate from...")]
+        TranslateFrom
+
+    }
+
+    public enum HelpSearchMessage
+    {
+        Search,
+        [Description("{0} result[s] for {1} (in {2} ms)")]
+        _0ResultsFor1In2,
+        Results
+    }
+
+    [DescriptionOptions(DescriptionOptions.Members)]
+    public enum TypeSearchResult
+    {
+        Appendix,
+        Namespace,
+        Type,
+        Property,
+        Query,
+        Operation,
+    }
 }

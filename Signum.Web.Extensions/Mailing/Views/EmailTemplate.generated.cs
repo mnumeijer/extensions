@@ -9,7 +9,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace Signum.Web.Extensions.Mailing.Views
+namespace Signum.Web.Mailing.Views
 {
     using System;
     using System.Collections.Generic;
@@ -76,7 +76,7 @@ WriteLiteral("\r\n\r\n");
 
             
             #line 8 "..\..\Mailing\Views\EmailTemplate.cshtml"
- using (var ec = Html.TypeContext<EmailTemplateDN>())
+ using (var ec = Html.TypeContext<EmailTemplateEntity>())
 {
     ec.LabelColumns = new BsColumn(3);
 
@@ -199,6 +199,8 @@ WriteLiteral("    <div");
 
 WriteLiteral(" class=\"col-sm-4 form-vertical\"");
 
+WriteLiteral(" style=\"margin-top:-12px\"");
+
 WriteLiteral(">\r\n        <fieldset>\r\n            <legend>Active</legend>\r\n");
 
 WriteLiteral("            ");
@@ -262,14 +264,14 @@ WriteLiteral("></div>\r\n");
             #line hidden
             
             #line 52 "..\..\Mailing\Views\EmailTemplate.cshtml"
-Write(Html.EntityLineDetail(ec, e => e.From, el => el.PreserveViewData = true));
+Write(Html.EntityDetail(ec, e => e.From, el => el.PreserveViewData = true));
 
             
             #line default
             #line hidden
             
             #line 52 "..\..\Mailing\Views\EmailTemplate.cshtml"
-                                                                             
+                                                                         
 
             
             #line default

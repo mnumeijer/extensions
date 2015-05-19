@@ -1,65 +1,73 @@
 ﻿/// <reference path="../../../../Framework/Signum.Web/Signum/Scripts/globals.ts"/>
 
 export function edit() {
-    $(".editable").each(function () {
-        var self = $(this);
-        self.bind('focus', function (event) {
-            $(this).addClass("modified");
-        });
+    $(".editable").show();
+    $(".shortcut").show();
+    $(".wiki").hide();
 
-        $("dd").addClass("editing");
-        $("#entityName").addClass("editing");
-    });
-
-    $(".shortcut").css("display", "block");
-    $("#edit-action").hide();
-    $("#syntax-action").show();
-    $("#save-action").show();
+    "edit-action".get().hide();
+    "syntax-action".get().show();
+    "save-action".get().show();
+    "translate-action".get().show();
 }
 
-export function save() {
-    $("#save-action").html("Guardando...");
+function save() {
+    "save-action".get().html("save-action".get().html() + "...");
+
     $.ajax({
         url: (<HTMLFormElement>document.getElementById("form-save")).action,
         async: false,
-        data: $("form#form-save .modified").serialize(),
-        success: function (msg) {
-            location.reload(true);
-            $("#saving-error").hide();
-        },
-        error: function (XMLHttpRequest, textStatus, errorThrown) {
-            var msg;
-            if (XMLHttpRequest.responseText != null && XMLHttpRequest.responseText != undefined) {
-                var startError = XMLHttpRequest.responseText.indexOf("<title>");
-                var endError = XMLHttpRequest.responseText.indexOf("</title>");
-                if ((startError != -1) && (endError != -1))
-                    msg = XMLHttpRequest.responseText.substring(startError + 7, endError);
-                else
-                    msg = XMLHttpRequest.responseText;
+        data: $("form#form-save :input").serializeObject(),
+        success: result => {
+            if (!result) {
+                location.reload(true);
             }
-            $("#saving-error .text").html(msg);
-            $("#saving-error").show();
         }
     });
 }
 
-once("SF.Help", () =>
-    $(function () {
+
+function translate(v: JQueryEventObject) {
+    v.preventDefault();
+    $.ajax({
+        url: $(v.currentTarget).attr("href"),
+        async: false,
+        data: $("form#form-save :input").serializeObject(),
+        success: (result) => {
+            if (!result) {
+                location.reload(true);
+            }
+        }
+    });
+}
+
+function hashSelected() {
+    $(".hash-selected").removeClass("hash-selected");
+
+    if (window.location.hash) {
+        $(window.location.hash).addClass("hash-selected"); 
+    }
+}
+
+export function init() {
+    $(() => {
         //$(".shortcut").click(function () { $.copy($(this).html()); });
 
-        if (typeof window.location.hash != 'undefined' && window.location.hash != '') {
-            window.location.hash += "-editor";
+        hashSelected();
 
-            var $dd = $(window.location.hash).parents("dd").first();
+        $(window).on('hashchange', function () {
+            hashSelected();
+        });
 
-            $dd.css('background-color', '#ccffaa');
-            $dd.prev().css('background-color', '#ccffaa');
+        "save-action".get().click(save);
+        "edit-action".get().click(edit);
 
-        }
-
-        $("#syntax-action").click(function () {
+        "syntax-action".get().click(e => {
             $("#syntax-list").slideToggle("slow");
-            $(this).toggleClass("active");
+            $(e.currentTarget).toggleClass("active");
             return null;
         });
-    }));
+
+        "translate-action".get().find("a").click(args => translate(args)); 
+    });
+}

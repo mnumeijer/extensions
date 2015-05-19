@@ -288,7 +288,7 @@ namespace Signum.Windows.Chart
 
         DataTemplate CreateDataTemplate(ResultColumn c)
         {
-            Binding b = new Binding("[{0}]".Formato(c.Index)) { Mode = BindingMode.OneTime };
+            Binding b = new Binding("[{0}]".FormatWith(c.Index)) { Mode = BindingMode.OneTime };
             DataTemplate dt = Settings.GetFormatter(c.Column)(b);
             return dt;
         }
@@ -310,7 +310,7 @@ namespace Signum.Windows.Chart
         {
             if (row.Table.HasEntities)
             {
-                Lite<IdentifiableEntity> lite = row.Entity;
+                Lite<Entity> lite = row.Entity;
 
                 if (Navigator.IsNavigable(lite.EntityType, isSearch: true))
                     Navigator.NavigateUntyped(lite);
@@ -363,7 +363,7 @@ namespace Signum.Windows.Chart
 
             if (!lastRequest.GroupResults)
             {
-                Lite<IdentifiableEntity> lite = (Lite<IdentifiableEntity>)FilterValueConverter.Parse(dic["entity"], this.Description.Columns.Single(a => a.IsEntity).Type, isList: false);
+                Lite<Entity> lite = (Lite<Entity>)FilterValueConverter.Parse(dic["entity"], this.Description.Columns.Single(a => a.IsEntity).Type, isList: false);
 
                 if (Navigator.IsNavigable(lite.EntityType, isSearch: true))
                     Navigator.NavigateUntyped(lite, new NavigateOptions());

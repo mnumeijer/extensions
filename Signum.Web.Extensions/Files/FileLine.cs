@@ -1,5 +1,4 @@
-﻿#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,9 +13,8 @@ using Signum.Entities.Basics;
 using Signum.Engine.Basics;
 using System.Web.Routing;
 using Signum.Engine;
-using Signum.Web.Extensions.Files;
+using Signum.Web.Files;
 using Newtonsoft.Json.Linq;
-#endregion
 
 namespace Signum.Web.Files
 {
@@ -24,6 +22,7 @@ namespace Signum.Web.Files
     {
         public const string File = "sfFile";
         public const string FileType = "sfFileType";
+        public const string ExtraData = "sfExtraData";
     }
 
     public enum DownloadBehaviour
@@ -36,6 +35,8 @@ namespace Signum.Web.Files
     public class FileLine : EntityBase
     {
         public FileTypeSymbol FileType { get; set; }
+
+        public string ExtraData { get; set; }
 
         public readonly RouteValueDictionary ValueHtmlProps = new RouteValueDictionary();
 
@@ -77,20 +78,25 @@ namespace Signum.Web.Files
                 result.Add("dragAndDrop", false);
             result.Add("download", (int)Download);
 
-            if (this.Type.CleanType() == typeof(FilePathDN) && !this.ReadOnly)
+            if (this.Type.CleanType() == typeof(FilePathEntity) && !this.ReadOnly)
             {
                 if (FileType == null)
-                    throw new ArgumentException("FileType is mandatory for FilePathDN (FileLine {0})".Formato(Prefix));
+                    throw new ArgumentException("FileType is mandatory for FilePathEntity (FileLine {0})".FormatWith(Prefix));
 
                 result.Add("fileType", FileType.Key);
-            }       
+            }
+
+            if (this.ExtraData.HasText())
+            {
+                result.Add("extraData", this.ExtraData);
+            }
 
             return result;
         }
 
         public IFile GetFileValue()
         {
-            Lite<IdentifiableEntity> lite = UntypedValue as Lite<IdentifiableEntity>;
+            Lite<Entity> lite = UntypedValue as Lite<Entity>;
 
             if (lite != null)
                 return (IFile)lite.Retrieve();

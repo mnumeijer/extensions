@@ -12,12 +12,14 @@ using Signum.Entities.DynamicQuery;
 using Signum.Entities.Mailing;
 using Signum.Utilities;
 using Signum.Utilities.ExpressionTrees;
+using Signum.Entities.Isolation;
+using Signum.Engine.Isolation;
 
 namespace Signum.Engine.Mailing
 {
     public interface ISystemEmail
     {
-        IdentifiableEntity UntypedEntity { get; }
+        Entity UntypedEntity { get; }
         List<EmailOwnerRecipientData> GetRecipients();
 
         List<Filter> GetFilters(QueryDescription qd);
@@ -35,16 +37,19 @@ namespace Signum.Engine.Mailing
     }
 
     public abstract class SystemEmail<T> : ISystemEmail
-        where T : IdentifiableEntity
+        where T : Entity
     {
         public T Entity { get; set; }
 
-        IdentifiableEntity ISystemEmail.UntypedEntity
+        Entity ISystemEmail.UntypedEntity
         {
             get { return Entity; }
         }
 
-        public abstract List<EmailOwnerRecipientData> GetRecipients();
+        public virtual List<EmailOwnerRecipientData> GetRecipients()
+        {
+            return new List<EmailOwnerRecipientData>();
+        }
 
         protected static List<EmailOwnerRecipientData> SendTo(EmailOwnerData ownerData)
         {
@@ -64,15 +69,15 @@ namespace Signum.Engine.Mailing
     {
         class SystemEmailInfo
         {
-            public Func<EmailTemplateDN> DefaultTemplateConstructor;
-            public object QueryName; 
+            public Func<EmailTemplateEntity> DefaultTemplateConstructor;
+            public object QueryName;
         }
 
-        static ResetLazy<Dictionary<Lite<SystemEmailDN>, List<EmailTemplateDN>>> SystemEmailsToEmailTemplates;
+        static ResetLazy<Dictionary<Lite<SystemEmailEntity>, List<EmailTemplateEntity>>> SystemEmailsToEmailTemplates;
         static Dictionary<Type, SystemEmailInfo> systemEmails = new Dictionary<Type, SystemEmailInfo>();
-        static ResetLazy<Dictionary<Type, SystemEmailDN>> systemEmailToDN;
-        static ResetLazy<Dictionary<SystemEmailDN, Type>> systemEmailToType;
-     
+        static ResetLazy<Dictionary<Type, SystemEmailEntity>> systemEmailToEntity;
+        static ResetLazy<Dictionary<SystemEmailEntity, Type>> systemEmailToType;
+
         public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
@@ -80,8 +85,8 @@ namespace Signum.Engine.Mailing
                 sb.Schema.Generating += Schema_Generating;
                 sb.Schema.Synchronizing += Schema_Synchronizing;
 
-                dqm.RegisterQuery(typeof(SystemEmailDN), () =>
-                    (from se in Database.Query<SystemEmailDN>()
+                dqm.RegisterQuery(typeof(SystemEmailEntity), () =>
+                    (from se in Database.Query<SystemEmailEntity>()
                      select new
                      {
                          Entity = se,
@@ -89,70 +94,74 @@ namespace Signum.Engine.Mailing
                          se.FullClassName,
                      }));
 
-                new Graph<EmailTemplateDN>.ConstructFrom<SystemEmailDN>(EmailTemplateOperation.CreateEmailTemplateFromSystemEmail)
+                new Graph<EmailTemplateEntity>.ConstructFrom<SystemEmailEntity>(EmailTemplateOperation.CreateEmailTemplateFromSystemEmail)
                 {
                     Construct = (se, _) => CreateDefaultTemplate(se)
                 }.Register();
 
                 SystemEmailsToEmailTemplates = sb.GlobalLazy(() => (
-                    from et in Database.Query<EmailTemplateDN>()
+                    from et in Database.Query<EmailTemplateEntity>()
                     where et.SystemEmail != null
                         && (et.Active && (et.EndDate == null || et.EndDate > TimeZoneManager.Now))
                     select new { se = et.SystemEmail, et })
                     .GroupToDictionary(pair => pair.se.ToLite(), pair => pair.et),
-                    new InvalidateWith(typeof(SystemEmailDN), typeof(EmailTemplateDN)));
+                    new InvalidateWith(typeof(SystemEmailEntity), typeof(EmailTemplateEntity)));
 
-                systemEmailToDN = sb.GlobalLazy(() =>
+                systemEmailToEntity = sb.GlobalLazy(() =>
                 {
-                    var dbSystemEmails = Database.RetrieveAll<SystemEmailDN>();
+                    var dbSystemEmails = Database.RetrieveAll<SystemEmailEntity>();
                     return EnumerableExtensions.JoinStrict(
-                        dbSystemEmails, systemEmails.Keys, typeDN => typeDN.FullClassName, type => type.FullName,
-                        (typeDN, type) => KVP.Create(type, typeDN), "caching EmailTemplates. Consider synchronize").ToDictionary();
-                }, new InvalidateWith(typeof(SystemEmailDN)));
+                        dbSystemEmails, systemEmails.Keys, systemEmail => systemEmail.FullClassName, type => type.FullName,
+                        (systemEmail, type) => KVP.Create(type, systemEmail), "caching EmailTemplates. Consider synchronize").ToDictionary();
+                }, new InvalidateWith(typeof(SystemEmailEntity)));
 
-                systemEmailToType = sb.GlobalLazy(() => systemEmailToDN.Value.Inverse(),
-                    new InvalidateWith(typeof(SystemEmailDN)));
+
+                sb.Schema.Initializing += () => systemEmailToEntity.Load();
+
+                systemEmailToType = sb.GlobalLazy(() => systemEmailToEntity.Value.Inverse(),
+                    new InvalidateWith(typeof(SystemEmailEntity)));
             }
         }
 
-        static readonly string systemTemplatesReplacementKey = "EmailTemplates";
+        static readonly string systemTemplatesReplacementKey = "SystemEmail";
 
         static SqlPreCommand Schema_Synchronizing(Replacements replacements)
         {
-            Table table = Schema.Current.Table<SystemEmailDN>();
+            Table table = Schema.Current.Table<SystemEmailEntity>();
 
-            Dictionary<string, SystemEmailDN> should = GenerateTemplates().ToDictionary(s => s.FullClassName);
-            Dictionary<string, SystemEmailDN> old = Administrator.TryRetrieveAll<SystemEmailDN>(replacements).ToDictionary(c =>
+            Dictionary<string, SystemEmailEntity> should = GenerateTemplates().ToDictionary(s => s.FullClassName);
+            Dictionary<string, SystemEmailEntity> old = Administrator.TryRetrieveAll<SystemEmailEntity>(replacements).ToDictionary(c =>
                 c.FullClassName);
 
             replacements.AskForReplacements(
                 old.Keys.ToHashSet(),
                 should.Keys.ToHashSet(), systemTemplatesReplacementKey);
 
-            Dictionary<string, SystemEmailDN> current = replacements.ApplyReplacementsToOld(old, systemTemplatesReplacementKey);
+            Dictionary<string, SystemEmailEntity> current = replacements.ApplyReplacementsToOld(old, systemTemplatesReplacementKey);
 
-            return Synchronizer.SynchronizeScript(should, current,
-                (tn, s) => table.InsertSqlSync(s),
-                (tn, c) => table.DeleteSqlSync(c),
-                (tn, s, c) =>
-                {
-                    var oldClassName = c.FullClassName;
-                    c.FullClassName = s.FullClassName;
-                    return table.UpdateSqlSync(c, comment: oldClassName);
-                },
-                Spacing.Double);
+            using (replacements.WithReplacedDatabaseName())
+                return Synchronizer.SynchronizeScript(should, current,
+                    (tn, s) => table.InsertSqlSync(s),
+                    (tn, c) => table.DeleteSqlSync(c),
+                    (tn, s, c) =>
+                    {
+                        var oldClassName = c.FullClassName;
+                        c.FullClassName = s.FullClassName;
+                        return table.UpdateSqlSync(c, comment: oldClassName);
+                    },
+                    Spacing.Double);
         }
 
-        public static void RegisterSystemEmail<T>(Func<EmailTemplateDN> defaultTemplateConstructor, object queryName = null)
+        public static void RegisterSystemEmail<T>(Func<EmailTemplateEntity> defaultTemplateConstructor, object queryName = null)
           where T : ISystemEmail
         {
             RegisterSystemEmail(typeof(T), defaultTemplateConstructor, queryName);
         }
 
-        public static void RegisterSystemEmail(Type model, Func<EmailTemplateDN> defaultTemplateConstructor, object queryName = null)
+        public static void RegisterSystemEmail(Type model, Func<EmailTemplateEntity> defaultTemplateConstructor, object queryName = null)
         {
             if (defaultTemplateConstructor == null)
-                throw new ArgumentNullException("defaultTemplateConstructor"); 
+                throw new ArgumentNullException("defaultTemplateConstructor");
 
             systemEmails[model] = new SystemEmailInfo
             {
@@ -165,38 +174,44 @@ namespace Signum.Engine.Mailing
         {
             var baseType = model.Follow(a => a.BaseType).FirstOrDefault(b => b.IsInstantiationOf(typeof(SystemEmail<>)));
 
-            if(baseType != null)
+            if (baseType != null)
             {
                 return baseType.GetGenericArguments()[0];
             }
 
-            throw new InvalidOperationException("Unknown queryName from {0}, set the argument queryName in RegisterSystemEmail".Formato(model.TypeName()));
+            throw new InvalidOperationException("Unknown queryName from {0}, set the argument queryName in RegisterSystemEmail".FormatWith(model.TypeName()));
         }
 
-        internal static List<SystemEmailDN> GenerateTemplates()
+        internal static List<SystemEmailEntity> GenerateTemplates()
         {
             var list = (from type in systemEmails.Keys
-                         select new SystemEmailDN
-                         {
+                        select new SystemEmailEntity
+                        {
                              FullClassName = type.FullName
-                         }).ToList();
+                        }).ToList();
             return list;
         }
 
         static SqlPreCommand Schema_Generating()
         {
-            Table table = Schema.Current.Table<SystemEmailDN>();
+            Table table = Schema.Current.Table<SystemEmailEntity>();
 
             return (from ei in GenerateTemplates()
                     select table.InsertSqlSync(ei)).Combine(Spacing.Simple);
         }
 
-        public static SystemEmailDN ToSystemEmailDN(Type type)
+
+        public static SystemEmailEntity GetSystemEmailEntity<T>() where T : ISystemEmail
         {
-            return systemEmailToDN.Value.GetOrThrow(type, "The system email {0} was not registered");
+            return ToSystemEmailEntity(typeof(T));
         }
 
-        public static Type ToType(this SystemEmailDN systemEmail)
+        public static SystemEmailEntity ToSystemEmailEntity(Type type)
+        {
+            return systemEmailToEntity.Value.GetOrThrow(type, "The system email {0} was not registered");
+        }
+
+        public static Type ToType(this SystemEmailEntity systemEmail)
         {
             if (systemEmail == null)
                 return null;
@@ -204,52 +219,59 @@ namespace Signum.Engine.Mailing
             return systemEmailToType.Value.GetOrThrow(systemEmail, "The system email {0} was not registered");
         }
 
-        public static IEnumerable<EmailMessageDN> CreateEmailMessage(this ISystemEmail systemEmail)
+        public static IEnumerable<EmailMessageEntity> CreateEmailMessage(this ISystemEmail systemEmail)
         {
             if (systemEmail.UntypedEntity == null)
                 throw new InvalidOperationException("Entity property not set on SystemEmail");
 
-            var systemEmailDN = ToSystemEmailDN(systemEmail.GetType());
-            var template = GetDefaultTemplate(systemEmailDN);
+            using (IsolationEntity.Override(systemEmail.UntypedEntity.TryIsolation()))
+            {
+                var systemEmailEntity = ToSystemEmailEntity(systemEmail.GetType());
+                var template = GetDefaultTemplate(systemEmailEntity);
 
-            return EmailTemplateLogic.CreateEmailMessage(template.ToLite(), systemEmail.UntypedEntity, systemEmail);
+                return EmailTemplateLogic.CreateEmailMessage(template.ToLite(), systemEmail.UntypedEntity, systemEmail);
+            }
         }
 
-        private static EmailTemplateDN GetDefaultTemplate(SystemEmailDN systemEmailDN)
+        private static EmailTemplateEntity GetDefaultTemplate(SystemEmailEntity systemEmailEntity)
         {
-            var list = SystemEmailsToEmailTemplates.Value.TryGetC(systemEmailDN.ToLite()); 
+            var isAllowed = Schema.Current.GetInMemoryFilter<EmailTemplateEntity>(userInterface: false);
 
-            if(list.IsNullOrEmpty())
+            var templates = SystemEmailsToEmailTemplates.Value.TryGetC(systemEmailEntity.ToLite()).EmptyIfNull();
+
+            templates = templates.Where(isAllowed);
+
+            if (templates.IsNullOrEmpty())
             {
+                using (ExecutionMode.Global())
+                using (OperationLogic.AllowSave<EmailTemplateEntity>())
                 using (Transaction tr = Transaction.ForceNew())
                 {
-                    var template = CreateDefaultTemplate(systemEmailDN);
+                    var template = CreateDefaultTemplate(systemEmailEntity);
 
-                    using (ExecutionMode.Global())
-                    using (OperationLogic.AllowSave<EmailTemplateDN>())
-                        template.Save();
+                    template.Save();
 
                     return tr.Commit(template);
                 }
             }
 
-            return list.Where(t => t.IsActiveNow()).SingleEx(() => "Active EmailTemplates for SystemEmail {0}".Formato(systemEmailDN));
+            return templates.Where(t => t.IsActiveNow()).SingleEx(() => "Active EmailTemplates for SystemEmail {0}".FormatWith(systemEmailEntity));
         }
 
-        internal static EmailTemplateDN CreateDefaultTemplate(SystemEmailDN systemEmailDN)
+        internal static EmailTemplateEntity CreateDefaultTemplate(SystemEmailEntity systemEmail)
         {
-            SystemEmailInfo info = systemEmails.GetOrThrow(systemEmailToType.Value.GetOrThrow(systemEmailDN));
+            SystemEmailInfo info = systemEmails.GetOrThrow(systemEmailToType.Value.GetOrThrow(systemEmail));
 
-            EmailTemplateDN template = info.DefaultTemplateConstructor();
+            EmailTemplateEntity template = info.DefaultTemplateConstructor();
             if (template.MasterTemplate != null)
                 template.MasterTemplate = EmailMasterTemplateLogic.GetDefaultMasterTemplate();
 
             if (template.Name == null)
-                template.Name = systemEmailDN.FullClassName;
+                template.Name = systemEmail.FullClassName;
 
-            template.SystemEmail = systemEmailDN;
+            template.SystemEmail = systemEmail;
             template.Active = true;
-            template.Query = QueryLogic.GetQuery(info.QueryName);
+            template.Query = QueryLogic.GetQueryEntity(info.QueryName);
 
             template.ParseData(DynamicQueryManager.Current.QueryDescription(info.QueryName));
 
@@ -260,18 +282,18 @@ namespace Signum.Engine.Mailing
         {
             foreach (var systemEmail in systemEmails.Keys)
             {
-                var systemEmailDN = ToSystemEmailDN(systemEmail);
+                var systemEmailEntity = ToSystemEmailEntity(systemEmail);
 
-                var template = Database.Query<EmailTemplateDN>().SingleOrDefaultEx(t =>
+                var template = Database.Query<EmailTemplateEntity>().SingleOrDefaultEx(t =>
                     t.IsActiveNow() == true &&
-                    t.SystemEmail == systemEmailDN);
+                    t.SystemEmail == systemEmailEntity);
 
                 if (template == null)
                 {
-                    template = CreateDefaultTemplate(systemEmailDN);
+                    template = CreateDefaultTemplate(systemEmailEntity);
 
                     using (ExecutionMode.Global())
-                    using (OperationLogic.AllowSave<EmailTemplateDN>())
+                    using (OperationLogic.AllowSave<EmailTemplateEntity>())
                         template.Save();
                 }
             }

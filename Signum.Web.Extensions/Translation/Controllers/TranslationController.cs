@@ -36,19 +36,19 @@ namespace Signum.Web.Translation.Controllers
                 {
                     Assembly = a,
                     CultureInfo = ci,
-                    IsDefault = ci.Name == a.SingleAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture,
+                    IsDefault = ci.Name == a.GetCustomAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture,
                     FileName = LocalizedAssembly.TranslationFileName(a, ci)
                 }).ToDictionary(tf => tf.CultureInfo));
 
-            return base.View(TranslationClient.ViewPrefix.Formato("Index"), dic);
+            return base.View(TranslationClient.ViewPrefix.FormatWith("Index"), dic);
         }
 
         [HttpGet]
         public ActionResult View(string assembly, string culture, bool searchPressed, string filter)
         {
-            Assembly ass = AssembliesToLocalize().Where(a => a.GetName().Name == assembly).SingleEx(() => "Assembly {0}".Formato(assembly));
+            Assembly ass = AssembliesToLocalize().Where(a => a.GetName().Name == assembly).SingleEx(() => "Assembly {0}".FormatWith(assembly));
 
-            CultureInfo defaultCulture = CultureInfo.GetCultureInfo(ass.SingleAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture);
+            CultureInfo defaultCulture = CultureInfo.GetCultureInfo(ass.GetCustomAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture);
             CultureInfo targetCulture = culture == null ? null : CultureInfo.GetCultureInfo(culture);
 
             Dictionary<CultureInfo, LocalizedAssembly> reference = !searchPressed ? null :
@@ -63,7 +63,7 @@ namespace Signum.Web.Translation.Controllers
             ViewBag.DefaultCulture = defaultCulture;
             ViewBag.Culture = targetCulture;
 
-            return base.View(TranslationClient.ViewPrefix.Formato("View"), reference);
+            return base.View(TranslationClient.ViewPrefix.FormatWith("View"), reference);
         }
 
         [HttpPost]
@@ -156,7 +156,7 @@ namespace Signum.Web.Translation.Controllers
                     case TranslationRecordKind.PluralDescription: lt.PluralDescription = Value; break;
                     case TranslationRecordKind.Gender: lt.Gender = Value != null ? (char?)Value[0] : null; break;
                     case TranslationRecordKind.Member: lt.Members[Member] = Value; break;
-                    default: throw new InvalidOperationException("Unexpected kind {0}".Formato(Kind));
+                    default: throw new InvalidOperationException("Unexpected kind {0}".FormatWith(Kind));
                 }
             }
         }
@@ -169,12 +169,12 @@ namespace Signum.Web.Translation.Controllers
             Member,
         }
 
-        public ActionResult Sync(string assembly, string culture)
+        public ActionResult Sync(string assembly, string culture, bool translatedOnly)
         {
-            Assembly ass = AssembliesToLocalize().Where(a => a.GetName().Name == assembly).SingleEx(() => "Assembly {0}".Formato(assembly));
+            Assembly ass = AssembliesToLocalize().Where(a => a.GetName().Name == assembly).SingleEx(() => "Assembly {0}".FormatWith(assembly));
             CultureInfo targetCulture = CultureInfo.GetCultureInfo(culture);
 
-            CultureInfo defaultCulture = CultureInfo.GetCultureInfo(ass.SingleAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture);
+            CultureInfo defaultCulture = CultureInfo.GetCultureInfo(ass.GetCustomAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture);
 
             Dictionary<CultureInfo, LocalizedAssembly> reference = (from ci in TranslationLogic.CurrentCultureInfos(defaultCulture)
                                                                     let la = DescriptionManager.GetLocalizedAssembly(ass, ci)
@@ -185,17 +185,17 @@ namespace Signum.Web.Translation.Controllers
             var target = reference.Extract(targetCulture); 
             DictionaryByTypeName(target); //To avoid finding duplicated types on save
             int totalTypes;
-            var changes = TranslationSynchronizer.GetAssemblyChanges(TranslationClient.Translator, target, master, reference.Values.ToList(), out totalTypes);
+            var changes = TranslationSynchronizer.GetAssemblyChanges(TranslationClient.Translator, target, master, reference.Values.ToList(), false, out totalTypes);
 
             ViewBag.TotalTypes = totalTypes;
             ViewBag.Culture = targetCulture;
-            return base.View(TranslationClient.ViewPrefix.Formato("Sync"), changes);
+            return base.View(TranslationClient.ViewPrefix.FormatWith("Sync"), changes);
         }
 
         [HttpPost]
         public ActionResult SaveSync(string assembly, string culture)
         {
-            Assembly currentAssembly = AssembliesToLocalize().Where(a => a.GetName().Name == assembly).SingleEx(() => "Assembly {0}".Formato(assembly));
+            Assembly currentAssembly = AssembliesToLocalize().Where(a => a.GetName().Name == assembly).SingleEx(() => "Assembly {0}".FormatWith(assembly));
 
             LocalizedAssembly locAssembly = LocalizedAssembly.ImportXml(currentAssembly, CultureInfo.GetCultureInfo(culture), forceCreate: true);
 
@@ -238,7 +238,7 @@ namespace Signum.Web.Translation.Controllers
 
             var target = DescriptionManager.GetLocalizedAssembly(Assembly, CultureInfo);
 
-            CultureInfo defaultCulture = CultureInfo.GetCultureInfo(Assembly.SingleAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture);
+            CultureInfo defaultCulture = CultureInfo.GetCultureInfo(Assembly.GetCustomAttribute<DefaultAssemblyCultureAttribute>().DefaultCulture);
             var master = DescriptionManager.GetLocalizedAssembly(Assembly, defaultCulture);
 
             var result = TranslationSynchronizer.GetMergeChanges(target, master, new List<LocalizedAssembly>());

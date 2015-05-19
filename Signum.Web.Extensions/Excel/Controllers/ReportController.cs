@@ -1,5 +1,4 @@
-#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -21,7 +20,6 @@ using Signum.Engine.Basics;
 using Signum.Web.Operations;
 using Signum.Entities.Excel;
 using Signum.Engine.Excel;
-#endregion
 
 namespace Signum.Web.Excel
 {
@@ -31,7 +29,7 @@ namespace Signum.Web.Excel
         public ActionResult ToExcelPlain(QueryRequest request)
         {
             if (!Finder.IsFindable(request.QueryName))
-                throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().Formato(request.QueryName));
+                throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().FormatWith(request.QueryName));
 
             ResultTable queryResult = DynamicQueryManager.Current.ExecuteQuery(request);
             byte[] binaryFile = PlainExcelGenerator.WritePlainExcel(queryResult);
@@ -40,10 +38,10 @@ namespace Signum.Web.Excel
         }
 
         [HttpPost]
-        public ActionResult ExcelReport(QueryRequest request, Lite<ExcelReportDN> excelReport)
+        public ActionResult ExcelReport(QueryRequest request, Lite<ExcelReportEntity> excelReport)
         {
             if (!Finder.IsFindable(request.QueryName))
-                throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().Formato(request.QueryName));
+                throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().FormatWith(request.QueryName));
 
             byte[] file = ExcelLogic.ExecuteExcelReport(excelReport, request);
 
@@ -53,9 +51,9 @@ namespace Signum.Web.Excel
         }
 
         [HttpPost]
-        public ActionResult Create(Lite<QueryDN> query, string prefix)
+        public ActionResult Create(Lite<QueryEntity> query, string prefix)
         {
-            ExcelReportDN report = new ExcelReportDN { Query = query.Retrieve() };
+            ExcelReportEntity report = new ExcelReportEntity { Query = query.Retrieve() };
 
             return this.DefaultConstructResult(report, prefix);
         }

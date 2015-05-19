@@ -27,7 +27,7 @@ namespace Signum.Web.Translation.Controllers
 
             var list = TranslatedInstanceLogic.TranslationInstancesStatus();
 
-            return base.View(TranslationClient.ViewPrefix.Formato("IndexInstance"), list.AgGroupToDictionary(a => a.Type, gr => gr.ToDictionary(a => a.CultureInfo)));
+            return base.View(TranslationClient.ViewPrefix.FormatWith("IndexInstance"), list.AgGroupToDictionary(a => a.Type, gr => gr.ToDictionary(a => a.CultureInfo)));
         }
 
         [HttpGet]
@@ -41,15 +41,15 @@ namespace Signum.Web.Translation.Controllers
             ViewBag.Filter = filter;
 
             if (!searchPressed)
-                return base.View(TranslationClient.ViewPrefix.Formato("ViewInstance"));
+                return base.View(TranslationClient.ViewPrefix.FormatWith("ViewInstance"));
 
             Dictionary<LocalizedInstanceKey, string> master = TranslatedInstanceLogic.FromEntities(t);
 
             ViewBag.Master = master;
 
-            Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceDN>> support = TranslatedInstanceLogic.TranslationsForType(t, culture: c);
+            Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceEntity>> support = TranslatedInstanceLogic.TranslationsForType(t, culture: c);
 
-            return base.View(TranslationClient.ViewPrefix.Formato("ViewInstance"), support);
+            return base.View(TranslationClient.ViewPrefix.FormatWith("ViewInstance"), support);
         }
 
         public FileContentResult ViewFile(string type, string culture)
@@ -93,7 +93,7 @@ namespace Signum.Web.Translation.Controllers
                             Key = new LocalizedInstanceKey(
                                 PropertyRoute.Parse(type, regexIndexer.Replace(route, "/")),
                                 Lite.Parse(m.Groups["instance"].Value),
-                                regexIndexer.Match(route).Let(mi => mi.Success ? int.Parse(mi.Groups["num"].Value) : (int?)null)
+                                regexIndexer.Match(route).Let(mi => mi.Success ? PrimaryKey.Parse(mi.Groups["num"].Value, type) : (PrimaryKey?)null)
                                 ),
                             TranslatedText = Request.Form[k].DefaultText(null),
                         }).ToList();
@@ -118,7 +118,7 @@ namespace Signum.Web.Translation.Controllers
 
             ViewBag.TotalInstances = totalInstances; 
             ViewBag.Culture = c;
-            return base.View(TranslationClient.ViewPrefix.Formato("SyncInstance"), changes);
+            return base.View(TranslationClient.ViewPrefix.FormatWith("SyncInstance"), changes);
         }
 
         public FileContentResult SyncFile(string type, string culture)

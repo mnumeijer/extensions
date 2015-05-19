@@ -1,5 +1,4 @@
-#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -25,17 +24,16 @@ using Signum.Engine.Operations;
 using Signum.Engine.Authorization;
 using Signum.Web.Operations;
 using Signum.Entities.UserAssets;
-#endregion
 
 namespace Signum.Web.UserQueries
 {
     public class UserQueriesController : Controller
     {
-        public ActionResult View(Lite<UserQueryDN> lite, FindOptions findOptions, Lite<IdentifiableEntity> currentEntity)
+        public ActionResult View(Lite<UserQueryEntity> lite, FindOptions findOptions, Lite<Entity> currentEntity)
         {
-            UserQueryPermission.ViewUserQuery.Authorize();
+            UserQueryPermission.ViewUserQuery.AssertAuthorized();
 
-            UserQueryDN uq =  UserQueryLogic.RetrieveUserQuery(lite);
+            UserQueryEntity uq =  UserQueryLogic.RetrieveUserQuery(lite);
 
             using (uq.EntityType == null ? null : CurrentEntityConverter.SetCurrentEntity(currentEntity.Retrieve()))
             {
@@ -51,20 +49,20 @@ namespace Signum.Web.UserQueries
         public ActionResult Create(QueryRequest request)
         {
             if (!Finder.IsFindable(request.QueryName))
-                throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().Formato(request.QueryName));
+                throw new UnauthorizedAccessException(NormalControlMessage.ViewForType0IsNotAllowed.NiceToString().FormatWith(request.QueryName));
 
             var userQuery = ToUserQuery(request);
 
-            userQuery.Owner = UserDN.Current.ToLite();
+            userQuery.Owner = UserEntity.Current.ToLite();
 
             return Navigator.NormalPage(this, userQuery);
         }
 
-        public static UserQueryDN ToUserQuery(QueryRequest request)
+        public static UserQueryEntity ToUserQuery(QueryRequest request)
         {
             return request.ToUserQuery(
                 DynamicQueryManager.Current.QueryDescription(request.QueryName),
-                QueryLogic.GetQuery(request.QueryName),
+                QueryLogic.GetQueryEntity(request.QueryName),
                 FindOptions.DefaultPagination,
                 withoutFilters: false /*Implement Simple Filter Builder*/);
         }

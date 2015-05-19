@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,16 +30,16 @@ namespace Signum.Windows.Notes
     {
         public event Action ForceShow;
 
-        public static NoteDN CreateNote(IdentifiableEntity entity)
+        public static NoteEntity CreateNote(Entity entity)
         {
             if (entity.IsNew)
                 return null;
 
-            return new NoteDN
+            return new NoteEntity
             {
                 Target = entity.ToLite(),
                 CreationDate = Server.Return((IBaseServer s) => s.ServerNow()),
-                CreatedBy = UserDN.Current.ToLite(),
+                CreatedBy = UserEntity.Current.ToLite(),
             };
         }
 
@@ -60,7 +60,7 @@ namespace Signum.Windows.Notes
             if (e.OriginalSource is Button) //Not to capture the mouseDown of the scrollbar buttons
             {
                 Button b = (Button)e.OriginalSource;
-                Lite<NoteDN> nota = (Lite<NoteDN>)b.Tag;
+                Lite<NoteEntity> nota = (Lite<NoteEntity>)b.Tag;
                 ViewNote(Server.RetrieveAndForget(nota));
             }
         }
@@ -70,24 +70,24 @@ namespace Signum.Windows.Notes
             if (DataContext == null)
                 return;
 
-            NoteDN nota = CreateNote((IdentifiableEntity)DataContext);
+            NoteEntity nota = CreateNote((Entity)DataContext);
 
             ViewNote(nota);
         }
 
-        public static Polymorphic<Func<IdentifiableEntity, FilterOption>> CustomFilter = new Polymorphic<Func<IdentifiableEntity, FilterOption>>();
+        public static Polymorphic<Func<Entity, FilterOption>> CustomFilter = new Polymorphic<Func<Entity, FilterOption>>();
 
         private void btnExploreNotes_Click(object sender, RoutedEventArgs e)
         {
             var func = CustomFilter.TryGetValue(DataContext.GetType());
 
-            var eo = new ExploreOptions(typeof(NoteDN))
+            var eo = new ExploreOptions(typeof(NoteEntity))
             {
                 ShowFilters = false,
                 SearchOnLoad = true,
                 FilterOptions =
                 {
-                    func != null ?  func((IdentifiableEntity)DataContext) : new FilterOption("Target", DataContext) { Frozen = true },
+                    func != null ?  func((Entity)DataContext) : new FilterOption("Target", DataContext) { Frozen = true },
                 },
                 OrderOptions = { new OrderOption("CreationDate", OrderType.Ascending) },
                 Closed = (_, __) => Dispatcher.Invoke(() => ReloadNotes())
@@ -102,7 +102,7 @@ namespace Signum.Windows.Notes
             Finder.Explore(eo);
         }
 
-        void ViewNote(NoteDN note)
+        void ViewNote(NoteEntity note)
         {
             Navigator.NavigateUntyped(note, new NavigateOptions()
             {
@@ -112,7 +112,7 @@ namespace Signum.Windows.Notes
 
         private void ReloadNotes()
         {
-            IdentifiableEntity entity = DataContext as IdentifiableEntity;
+            Entity entity = DataContext as Entity;
             if (entity == null || entity.IsNew)
             {
                 // lvNotas.ItemsSource = null;
@@ -121,7 +121,7 @@ namespace Signum.Windows.Notes
 
             var func = CustomFilter.TryGetValue(DataContext.GetType());
 
-            DynamicQueryServer.QueryCountBatch(new QueryCountOptions(typeof(NoteDN))
+            DynamicQueryServer.QueryCountBatch(new QueryCountOptions(typeof(NoteEntity))
             {
                 FilterOptions = 
                 { 

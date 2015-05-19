@@ -9,7 +9,6 @@ using Signum.Entities.UserAssets;
 using Signum.Utilities;
 using Signum.Web.Omnibox;
 using Signum.Web.UserAssets;
-using Signum.Web.Extensions.UserAssets;
 
 namespace Signum.Web.UserAssets
 {
@@ -30,7 +29,7 @@ namespace Signum.Web.UserAssets
             }
         }
 
-        internal static void RegisterExportAssertLink<T>() where T : IdentifiableEntity, IUserAssetEntity
+        internal static void RegisterExportAssertLink<T>() where T : Entity, IUserAssetEntity
         {
             LinksClient.RegisterEntityLinks<T>((lite, ctx) => new[]
             {

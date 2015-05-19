@@ -1,5 +1,4 @@
-﻿#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,7 +14,6 @@ using Signum.Entities.Basics;
 using Signum.Engine.Basics;
 using Signum.Engine;
 using Signum.Web.PortableAreas;
-#endregion
 
 namespace Signum.Web.Files
 {
@@ -36,13 +34,13 @@ namespace Signum.Web.Files
         }
 
         public static MvcHtmlString FileLineLite<T, S>(this HtmlHelper helper, TypeContext<T> tc, Expression<Func<T, Lite<S>>> property)
-           where S : class, IFile, IIdentifiable 
+           where S : class, IFile, IEntity 
         {
             return FileLineInternal<T, Lite<S>>(helper, tc, property, null);
         }
 
         public static MvcHtmlString FileLineLite<T, S>(this HtmlHelper helper, TypeContext<T> tc, Expression<Func<T, Lite<S>>> property, Action<FileLine> settingsModifier)
-           where S : class, IFile, IIdentifiable 
+           where S : class, IFile, IEntity 
         {
             return FileLineInternal<T, Lite<S>>(helper, tc, property, settingsModifier);
         }
@@ -55,7 +53,7 @@ namespace Signum.Web.Files
 
             EntityBaseHelper.ConfigureEntityBase(fl, fl.Type.CleanType());
 
-            fl.Download = (context.Type.IsIIdentifiable() || context.Type.IsLite()) ? DownloadBehaviour.View : DownloadBehaviour.None;
+            fl.Download = FilesClient.DownloadUrlConstructors.ContainsKey(context.Type.CleanType()) ? DownloadBehaviour.View : DownloadBehaviour.None;
 
             Common.FireCommonTasks(fl);
 
@@ -94,7 +92,7 @@ namespace Signum.Web.Files
                         {
                             sb.AddLine(helper.Href(fileLine.Compose(EntityBaseKeys.Link),
                                 value.Try(f => f.FileName),
-                                hasEntity ? FilesClient.GetDownloadPath(value) : null,
+                                hasEntity ? FilesClient.GetDownloadUrl(value) : null,
                                 "Download",
                                 "form-control",
                                 fileLine.Download == DownloadBehaviour.View ? null :
@@ -116,26 +114,29 @@ namespace Signum.Web.Files
 
                     sbg.AddLine(helper.FormGroup(fileLine,
                         fileLine.Download == DownloadBehaviour.None ? fileLine.Compose(EntityBaseKeys.Link) : fileLine.Compose(EntityBaseKeys.ToStr),
-                        fileLine.LabelText, sb.ToHtml()));
+                        fileLine.LabelHtml ?? fileLine.LabelText.FormatHtml(), sb.ToHtml()));
                 }
 
                 using (sbg.SurroundLine(new HtmlTag("div", fileLine.Compose("DivNew"))
                     .Class("sf-file-line-new")
                     .Attr("style", "display:" + (hasEntity ? "none" : "block"))))
                 {
-
                     HtmlStringBuilder sb = new HtmlStringBuilder();
                     sb.AddLine(helper.HiddenRuntimeInfo(fileLine));
-                    sb.AddLine(MvcHtmlString.Create("<input type='file' id='{0}' name='{0}' class='form-control'/>".Formato(fileLine.Compose(FileLineKeys.File))));
-                    sb.AddLine(MvcHtmlString.Create("<img src='{0}' id='{1}_loading' alt='loading' style='display:none'/>".Formato(RouteHelper.New().Content("~/Files/Images/loading.gif"), fileLine.Prefix)));
+                    if (!fileLine.ReadOnly)
+                    {
+                        sb.AddLine(MvcHtmlString.Create("<input type='file' id='{0}' name='{0}' class='form-control'/>".FormatWith(fileLine.Compose(FileLineKeys.File))));
+                        sb.AddLine(MvcHtmlString.Create("<img src='{0}' id='{1}_loading' alt='loading' style='display:none'/>".FormatWith(RouteHelper.New().Content("~/Files/Images/loading.gif"), fileLine.Prefix)));
+                    }
 
 
                     sbg.AddLine(helper.FormGroup(fileLine,
                         fileLine.Compose(FileLineKeys.File),
-                        fileLine.LabelText, sb.ToHtml()));
+                        fileLine.LabelHtml ?? fileLine.LabelText.FormatHtml(), sb.ToHtml()));
                 }
 
-                sbg.AddLine(fileLine.ConstructorScript(FilesClient.Module, "FileLine"));
+                if (!fileLine.ReadOnly)
+                    sbg.AddLine(fileLine.ConstructorScript(FilesClient.Module, "FileLine"));
             }
 
             return sbg.ToHtml();

@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Selenium;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Remote;
 using Signum.Entities;
 using Signum.Utilities;
 
@@ -12,7 +13,7 @@ namespace Signum.Web.Selenium
     {
         RuntimeInfoProxy RuntimeInfo();
 
-        string ContainerLocator();
+        By ContainerLocator();
     }
 
     public interface IEntityButtonContainer<T> : IEntityButtonContainer
@@ -21,18 +22,18 @@ namespace Signum.Web.Selenium
 
     public static class EntityButtonContainerExtensions
     {
-        public static Lite<T> GetLite<T>(this IEntityButtonContainer<T> container) where T : IdentifiableEntity
+        public static Lite<T> GetLite<T>(this IEntityButtonContainer<T> container) where T : Entity
         {
             return (Lite<T>)container.RuntimeInfo().ToLite();
         }
 
-        public static string ButtonLocator(this IEntityButtonContainer container, string buttonId)
+        public static By ButtonLocator(this IEntityButtonContainer container, string buttonId)
         {
-            return container.ContainerLocator() + " #" + "_".CombineIfNotEmpty(container.Prefix, buttonId);
+            return container.ContainerLocator().CombineCss(" #" + "_".CombineIfNotEmpty(container.Prefix, buttonId));
         }
 
-        public static string OperationLocator<T>(this IEntityButtonContainer<T> container, IEntityOperationSymbolContainer<T> symbol)
-            where T : IdentifiableEntity
+        public static By OperationLocator<T>(this IEntityButtonContainer<T> container, IEntityOperationSymbolContainer<T> symbol)
+            where T : Entity
         {
             return container.ButtonLocator(symbol.Symbol.KeyWeb());
         }
@@ -44,43 +45,46 @@ namespace Signum.Web.Selenium
 
         public static bool ButtonEnabled(this IEntityButtonContainer container, string idButton)
         {
-            string locator = container.ButtonLocator(idButton);
+            By locator = container.ButtonLocator(idButton);
 
-            return container.Selenium.IsElementPresent(locator + ":not([disabled])");
+            return container.Selenium.IsElementPresent(locator.CombineCss(":not([disabled])"));
         }
 
         public static bool OperationEnabled<T>(this IEntityButtonContainer<T> container, IEntityOperationSymbolContainer<T> symbol)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             return container.ButtonEnabled(symbol.Symbol.KeyWeb());
         }
 
         public static bool ButtonDisabled(this IEntityButtonContainer container, string idButton)
         {
-            string locator = container.ButtonLocator(idButton);
+            By locator = container.ButtonLocator(idButton);
 
-            return container.Selenium.IsElementPresent(locator + "[disabled]");
+            return container.Selenium.IsElementPresent(locator.CombineCss("[disabled]"));
         }
 
         public static bool OperationDisabled<T>(this IEntityButtonContainer<T> container, IEntityOperationSymbolContainer<T> symbol)
-              where T : IdentifiableEntity
+              where T : Entity
         {
             return container.ButtonDisabled(symbol.Symbol.KeyWeb());
         }
 
         public static void ButtonClick(this IEntityButtonContainer container, string idButton)
         {
-            container.Selenium.MouseUp(container.ButtonLocator(idButton) + ":not([disabled])");
+            var button = container.Selenium.FindElement(container.ButtonLocator(idButton));
+
+            button.ButtonClick();
         }
 
+
         public static void OperationClick<T>(this IEntityButtonContainer<T> container, IEntityOperationSymbolContainer<T> symbol)
-              where T : IdentifiableEntity
+              where T : Entity
         {
             container.ButtonClick(symbol.Symbol.KeyWeb());
         }
 
         public static void ExecuteAjax<T>(this IEntityButtonContainer<T> container, ExecuteSymbol<T> symbol)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             container.WaitReload(() => container.OperationClick(symbol));
         }
@@ -92,52 +96,49 @@ namespace Signum.Web.Selenium
             container.Selenium.Wait(() => container.TestTicks().Let(t => t != null && t != ticks));
         }
 
-        public static void ExecuteSubmit<T>(this IEntityButtonContainer<T> container, ExecuteSymbol<T> symbol)
-              where T : IdentifiableEntity
+        public static void ExecuteSubmit<T>(this NormalPage<T> container, ExecuteSymbol<T> symbol)
+              where T : Entity
         {
             container.OperationClick(symbol);
-            container.Selenium.WaitForPageToLoad();
+            container.WaitLoadedAndId();
         }
 
         public static SearchPageProxy DeleteSubmit<T>(this IEntityButtonContainer<T> container, DeleteSymbol<T> symbol)
-              where T : IdentifiableEntity
+              where T : Entity
         {
             container.OperationClick(symbol);
-            container.Selenium.ConsumeConfirmation();
+            container.Selenium.ConsumeAlert();
 
-            container.Selenium.WaitForPageToLoad();
 
-            return new SearchPageProxy(container.Selenium);
+            return new SearchPageProxy(container.Selenium).WaitLoaded();
         }
 
         public static NormalPage<T> ConstructFromNormalPageSaved<F, T>(this IEntityButtonContainer<F> container, ConstructSymbol<T>.From<F> symbol)
-            where T : IdentifiableEntity
-            where F : IdentifiableEntity
+            where T : Entity
+            where F : Entity
         {
             container.OperationClick(symbol);
 
-            container.Selenium.WaitForPageToLoad();
-
-            return new NormalPage<T>(container.Selenium, null);
+            return new NormalPage<T>(container.Selenium, null).WaitLoaded();
         }
 
         public static NormalPage<T> ConstructFromNormalPageNew<F, T>(this IEntityButtonContainer<F> container, ConstructSymbol<T>.From<F> symbol)
-            where T : IdentifiableEntity
-            where F : IdentifiableEntity
+            where T : Entity
+            where F : Entity
         {
             container.OperationClick(symbol);
 
-            container.Selenium.Wait(() => container.RuntimeInfo().IsNew);
+            container.Selenium.Wait(() => { try { return container.RuntimeInfo().IsNew; } catch { return false; } });
 
             return new NormalPage<T>(container.Selenium, null);
         }
 
         public static NormalPage<T> OperationNormalPageNew<T>(this IEntityButtonContainer container, IOperationSymbolContainer symbol)
-            where T : IdentifiableEntity
+            where T : Entity
         {
             container.ButtonClick(symbol.Symbol.KeyWeb());
 
-            container.Selenium.Wait(() => container.RuntimeInfo().IsNew);
+            container.Selenium.Wait(() => { try { return container.RuntimeInfo().IsNew; } catch { return false; } });
 
             return new NormalPage<T>(container.Selenium, null);
         }
@@ -149,34 +150,34 @@ namespace Signum.Web.Selenium
 
             var popup = new PopupControl<T>(container.Selenium, prefix);
 
-            container.Selenium.WaitElementPresent(popup.PopupVisibleLocator);
+            container.Selenium.WaitElementPresent(popup.PopupLocator);
 
             return popup;
         }
 
         public static PopupControl<T> ConstructFromPopup<F, T>(this IEntityButtonContainer<F> container, ConstructSymbol<T>.From<F> symbol)
-            where T : IdentifiableEntity
-            where F : IdentifiableEntity
+            where T : Entity
+            where F : Entity
         {
             container.OperationClick(symbol);
 
             var popup = new PopupControl<T>(container.Selenium, "New");
 
-            container.Selenium.WaitElementPresent(popup.PopupVisibleLocator);
+            container.Selenium.WaitElementPresent(popup.PopupLocator);
 
             return popup;
         }
 
         public static bool HasChanges(this IEntityButtonContainer container)
         {
-            return container.Selenium.IsElementPresent("jq=#{0}divMainControl.sf-changed".Formato(container.PrefixUnderscore()));
+            return container.Selenium.IsElementPresent(By.CssSelector("#{0}divMainControl.sf-changed".FormatWith(container.PrefixUnderscore())));
         }
 
         public static long? TestTicks(this IEntityButtonContainer container)
         {
             try
             {
-                return container.Selenium.GetEval("window && window.$ && window.$('#" + container.PrefixUnderscore() + "divMainControl').attr('data-test-ticks')").ToLong();
+                return ((string)container.Selenium.ExecuteScript("return $ && $('#" + container.PrefixUnderscore() + "divMainControl').attr('data-test-ticks')")).ToLong();
             }
             catch
             {

@@ -8,6 +8,7 @@ using Signum.Entities;
 using Signum.Utilities;
 using Signum.Web.Omnibox;
 using Signum.Engine.ViewLog;
+using Signum.Entities.ViewLog;
 
 namespace Signum.Web.ViewLog
 {
@@ -18,10 +19,12 @@ namespace Signum.Web.ViewLog
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
                 Navigator.Manager.RetrievingForView += Manager_RetrievingForView;
+
+                LinksClient.RegisterEntityLinks<Entity>((ident, ctx) => new[] { new QuickLinkExplore(typeof(ViewLogEntity), "Target", ident) });
             }
         }
 
-        static IDisposable Manager_RetrievingForView(Lite<IdentifiableEntity> lite)
+        static IDisposable Manager_RetrievingForView(Lite<Entity> lite)
         {
             return ViewLogLogic.LogView(lite, "WebRetrieve");
         }

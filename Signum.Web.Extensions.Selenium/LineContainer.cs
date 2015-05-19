@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
-using Selenium;
+using OpenQA.Selenium.Remote;
 using Signum.Engine;
 using Signum.Engine.Basics;
 using Signum.Entities;
@@ -13,6 +13,7 @@ using Signum.Utilities;
 using System.Reflection;
 using Signum.Entities.DynamicQuery;
 using Signum.Entities.UserAssets;
+using OpenQA.Selenium;
 
 namespace Signum.Web.Selenium
 {
@@ -23,7 +24,7 @@ namespace Signum.Web.Selenium
 
     public interface ILineContainer
     {
-        ISelenium Selenium { get; }
+        RemoteWebDriver Selenium { get; }
 
         string Prefix { get; }
 
@@ -32,9 +33,9 @@ namespace Signum.Web.Selenium
 
     public static class LineContainerExtensions
     {
-        public static bool HasError(this ISelenium selenium, string elementId)
+        public static bool HasError(this RemoteWebDriver selenium, string elementId)
         {
-            return selenium.IsElementPresent("jq=#{0}.input-validation-error".Formato(elementId));
+            return selenium.IsElementPresent(By.CssSelector("#{0}.input-validation-error".FormatWith(elementId)));
         }
 
         public static PropertyRoute GetRoute<T, S>(this ILineContainer<T> lineContainer, Expression<Func<T, S>> property, out string newPrefix) where T : ModifiableEntity
@@ -129,7 +130,7 @@ namespace Signum.Web.Selenium
         public static void EntityLineValue<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property, V value)
             where T : ModifiableEntity
         {
-            lineContainer.EntityLine(property).LiteValue = value is Lite<IIdentifiable> ? (Lite<IIdentifiable>)value : ((IIdentifiable)value).ToLite();
+            lineContainer.EntityLine(property).LiteValue = value is Lite<IEntity> ? (Lite<IEntity>)value : ((IEntity)value).ToLite();
         }
 
         public static EntityComboProxy EntityCombo<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property)
@@ -152,16 +153,16 @@ namespace Signum.Web.Selenium
         public static void EntityComboValue<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property, V value)
             where T : ModifiableEntity
         {
-            lineContainer.EntityCombo(property).LiteValue = value is Lite<IIdentifiable> ? (Lite<IIdentifiable>)value : ((IIdentifiable)value).ToLite();
+            lineContainer.EntityCombo(property).LiteValue = value is Lite<IEntity> ? (Lite<IEntity>)value : ((IEntity)value).ToLite();
         }
 
-        public static EntityLineDetailProxy EntityLineDetail<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property)
+        public static EntityDetailProxy EntityDetail<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property)
           where T : ModifiableEntity
         {
             string newPrefix;
             PropertyRoute newRoute = lineContainer.GetRoute(property, out newPrefix);
 
-            return new EntityLineDetailProxy(lineContainer.Selenium, newPrefix, newRoute);
+            return new EntityDetailProxy(lineContainer.Selenium, newPrefix, newRoute);
         }
 
         public static EntityRepeaterProxy EntityRepeater<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property)
@@ -201,7 +202,7 @@ namespace Signum.Web.Selenium
         }
 
         public static EntityListDetailProxy EntityListDetail<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property)
-       where T : ModifiableEntity
+            where T : ModifiableEntity
         {
             string newPrefix;
             PropertyRoute newRoute = lineContainer.GetRoute(property, out newPrefix);
@@ -209,9 +210,18 @@ namespace Signum.Web.Selenium
             return new EntityListDetailProxy(lineContainer.Selenium, newPrefix, newRoute);
         }
 
+        public static EntityListCheckBoxProxy EntityListCheckBox<T, V>(this ILineContainer<T> lineContainer, Expression<Func<T, V>> property)
+            where T : ModifiableEntity
+        {
+            string newPrefix;
+            PropertyRoute newRoute = lineContainer.GetRoute(property, out newPrefix);
+
+            return new EntityListCheckBoxProxy(lineContainer.Selenium, newPrefix, newRoute);
+        }
+
         public static bool IsImplementation(this PropertyRoute route, Type type)
         {
-            if (!typeof(IdentifiableEntity).IsAssignableFrom(type))
+            if (!typeof(Entity).IsAssignableFrom(type))
                 return false;
 
             var routeType = route.Type.CleanType();
@@ -219,7 +229,7 @@ namespace Signum.Web.Selenium
             return routeType.IsAssignableFrom(type);
         }
 
-        public static QueryTokenBuilderProxy QueryTokenBuilder<T>(this ILineContainer<T> lineContainer, Expression<Func<T, QueryTokenDN>> property)
+        public static QueryTokenBuilderProxy QueryTokenBuilder<T>(this ILineContainer<T> lineContainer, Expression<Func<T, QueryTokenEntity>> property)
             where T : ModifiableEntity
         {
             string newPrefix;
@@ -231,8 +241,8 @@ namespace Signum.Web.Selenium
         public static void SelectTab(this ILineContainer lineContainer, string tabId)
         {
             var fullTabId = lineContainer.PrefixUnderscore() + tabId;
-            lineContainer.Selenium.Click("jq=a[href='#{0}']".Formato(fullTabId));
-            lineContainer.Selenium.Wait(() => lineContainer.Selenium.IsElementPresent("jq=#{0}:visible".Formato(fullTabId)));
+            lineContainer.Selenium.FindElement(By.CssSelector("a[href='#{0}']".FormatWith(fullTabId))).Click();
+            lineContainer.Selenium.Wait(() => lineContainer.Selenium.IsElementVisible(By.Id(fullTabId)));
 
         }
 
@@ -246,17 +256,17 @@ namespace Signum.Web.Selenium
 
         public static string[] Errors(this ILineContainer lineContainer)
         {
-            var result = lineContainer.Selenium
-                .GetEval("window.$('#" + lineContainer.PrefixUnderscore() + "sfGlobalValidationSummary > ul > li').toArray().map(function(e){return $(e).text()}).join('\\r\\n');");
+            var result = (string)lineContainer.Selenium
+                .ExecuteScript("return $('#" + lineContainer.PrefixUnderscore() + "sfGlobalValidationSummary > ul > li').toArray().map(function(e){return $(e).text()}).join('\\r\\n');");
 
-            return result.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+            return result.SplitNoEmpty("\r\n" );
         }
 
         public static SearchControlProxy GetSearchControl(this ILineContainer lineContainer, object queryName)
         {
             string query = QueryUtils.GetQueryUniqueKey(queryName);
 
-            var prefix = lineContainer.Selenium.GetEval("window.$('div.sf-search-control[data-queryname=\"{0}\"]').data('prefix')".Formato(query));
+            var prefix = (string)lineContainer.Selenium.ExecuteScript("return $('div.sf-search-control[data-queryname=\"{0}\"]').data('prefix')".FormatWith(query));
 
             return new SearchControlProxy(lineContainer.Selenium, prefix);
         }
@@ -269,13 +279,13 @@ namespace Signum.Web.Selenium
 
     public class LineContainer<T> :ILineContainer<T> where T:ModifiableEntity
     {
-        public ISelenium Selenium { get; private set; }
+        public RemoteWebDriver Selenium { get; private set; }
 
         public string Prefix { get; private set; }
 
         public PropertyRoute Route { get; private set; }
 
-        public LineContainer(ISelenium selenium, string prefix = null, PropertyRoute route = null)
+        public LineContainer(RemoteWebDriver selenium, string prefix = null, PropertyRoute route = null)
         {
             this.Selenium = selenium;
             this.Prefix = prefix;
@@ -285,22 +295,22 @@ namespace Signum.Web.Selenium
 
     public class NormalPage<T> : ILineContainer<T>, IEntityButtonContainer<T>, IWidgetContainer, IDisposable where T : ModifiableEntity
     {
-        public ISelenium Selenium { get; private set; }
+        public RemoteWebDriver Selenium { get; private set; }
 
         public string Prefix { get; private set; }
 
         public PropertyRoute Route { get; private set; }
 
-        public NormalPage(ISelenium selenium, string prefix = null)
+        public NormalPage(RemoteWebDriver selenium, string prefix = null)
         {
             this.Selenium = selenium;
             this.Prefix = prefix;
             this.Route = PropertyRoute.Root(typeof(T));
         }
 
-        public string ContainerLocator()
+        public By ContainerLocator()
         {
-            return "jq=#divMainPage";
+            return By.CssSelector("#divMainPage");
         }
 
         public void Dispose()
@@ -309,31 +319,50 @@ namespace Signum.Web.Selenium
 
         public bool HasId()
         {
-            return Selenium.IsElementPresent("jq=#divMainPage[data-isnew=false]");
+            return Selenium.IsElementPresent(By.CssSelector("#divMainPage[data-isnew=false]"));
+        }
+
+        public NormalPage<T> WaitLoaded()
+        {
+            this.Selenium.Wait(() => { var ri = this.RuntimeInfo(); return ri != null && ri.EntityType == typeof(T); });
+
+            return this;
+        }
+
+        public NormalPage<T> WaitLoadedAndId()
+        {
+            this.Selenium.Wait(() => {var ri = this.RuntimeInfo(); return ri != null && ri.EntityType == typeof(T) && ri.IdOrNull.HasValue;});
+
+            return this;
         }
 
         public string Title()
         {
-            return Selenium.GetEval("window.$('#divMainPage > h3 > .sf-entity-title').html()");
+            return (string)Selenium.ExecuteScript("return $('#divMainPage > h3 > .sf-entity-title').html()");
         }
 
         public RuntimeInfoProxy RuntimeInfo()
         {
-            return RuntimeInfoProxy.FromFormValue(Selenium.GetEval("window.$('#sfRuntimeInfo').val()"));
+            var ri = (string)Selenium.ExecuteScript("return $('#sfRuntimeInfo').val()");
+
+            if (ri == null)
+                return null;
+
+            return RuntimeInfoProxy.FromFormValue(ri);
         }
 
         public T RetrieveEntity()
         {
             var lite = this.RuntimeInfo().ToLite();
-            return (T)(IIdentifiable)lite.Retrieve();
+            return (T)(IEntity)lite.Retrieve();
         }
 
         public string EntityState()
         {
-            if (int.Parse(Selenium.GetEval("window.$('#sfEntityState').length".Formato(Prefix))) == 0)
+            if ((long)Selenium.ExecuteScript("return $('#sfEntityState').length".FormatWith(Prefix)) == 0)
                 return null;
 
-            return Selenium.GetEval("window.$('#sfEntityState')[0].value".Formato(Prefix));
+            return (string)Selenium.ExecuteScript("return $('#sfEntityState')[0].value".FormatWith(Prefix));
         }
     }
 }

@@ -28,19 +28,19 @@ namespace Signum.Engine.Translation
 
         public static Dictionary<Type, Dictionary<PropertyRoute, TraducibleRouteType>> TraducibleRoutes 
             = new Dictionary<Type, Dictionary<PropertyRoute, TraducibleRouteType>>();
-        static ResetLazy<Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceDN>>> LocalizationCache;
+        static ResetLazy<Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceEntity>>> LocalizationCache;
 
         public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, string defaultCulture)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
-                sb.Include<TranslatedInstanceDN>();
-                sb.AddUniqueIndex<TranslatedInstanceDN>(ti => new { ti.Culture, ti.PropertyRoute, ti.Instance, ti.RowId });
+                sb.Include<TranslatedInstanceEntity>();
+                sb.AddUniqueIndex<TranslatedInstanceEntity>(ti => new { ti.Culture, ti.PropertyRoute, ti.Instance, ti.RowId });
 
                 DefaultCulture = CultureInfo.GetCultureInfo(defaultCulture);
 
-                dqm.RegisterQuery(typeof(TranslatedInstanceDN), () =>
-                    from e in Database.Query<TranslatedInstanceDN>()
+                dqm.RegisterQuery(typeof(TranslatedInstanceEntity), () =>
+                    from e in Database.Query<TranslatedInstanceEntity>()
                     select new
                     {
                         Entity = e,
@@ -52,21 +52,37 @@ namespace Signum.Engine.Translation
                         e.OriginalText,
                     });
 
-                LocalizationCache = sb.GlobalLazy(() => Database.Query<TranslatedInstanceDN>()
+                LocalizationCache = sb.GlobalLazy(() =>
+                    Database.Query<TranslatedInstanceEntity>()
+                    .ToList()
                     .AgGroupToDictionary(a => a.Culture.ToCultureInfo(),
-                    gr => gr.ToDictionary(a => new LocalizedInstanceKey(a.PropertyRoute.ToPropertyRoute(), a.Instance, a.RowId))),
-                    new InvalidateWith(typeof(TranslatedInstanceDN)));
+                    gr2 => gr2.GroupBy(a => a.PropertyRoute)
+                        .SelectMany(gr =>
+                        {
+                            PropertyRoute pr = gr.Key.ToPropertyRoute();
 
-                sb.Schema.Initializing += () =>
+                            PropertyRoute mListRoute = pr.GetMListItemsRoute();
+
+                            if (mListRoute == null)
+                                return gr.Select(ti => KVP.Create(new LocalizedInstanceKey(pr, ti.Instance, null), ti));
+
+                            Type type = ((FieldMList)Schema.Current.Field(mListRoute.Parent)).TableMList.PrimaryKey.Type;
+
+                            return gr.Select(ti => KVP.Create(new LocalizedInstanceKey(pr, ti.Instance, new PrimaryKey((IComparable)ReflectionTools.Parse(ti.RowId, type))), ti));
+
+                        }).ToDictionary())
+                        , new InvalidateWith(typeof(TranslatedInstanceEntity)));
+
+                sb.Schema.SchemaCompleted += () =>
                 {
                     var s = Schema.Current;
 
                     var prs = (from t in s.Tables.Keys
-                             from pr in PropertyRoute.GenerateRoutes(t)
-                             where pr.PropertyRouteType == PropertyRouteType.FieldOrProperty && pr.FieldInfo != null && pr.FieldInfo.FieldType == typeof(string)
-                             && s.Settings.FieldAttributes(pr).OfType<TranslateFieldAttribute>().Any() && 
-                             !s.Settings.FieldAttributes(pr).OfType<IgnoreAttribute>().Any()
-                             select KVP.Create(pr, s.Settings.FieldAttributes(pr).OfType<TranslateFieldAttribute>().Single().TraducibleRouteType)).ToList();
+                               from pr in PropertyRoute.GenerateRoutes(t)
+                               where pr.PropertyRouteType == PropertyRouteType.FieldOrProperty && pr.FieldInfo != null && pr.FieldInfo.FieldType == typeof(string) &&
+                               s.Settings.FieldAttribute<TranslateFieldAttribute>(pr) != null &&
+                               s.Settings.FieldAttribute<IgnoreAttribute>(pr) == null
+                               select KVP.Create(pr, s.Settings.FieldAttribute<TranslateFieldAttribute>(pr).TraducibleRouteType)).ToList();
 
                     foreach (var kvp in prs)
                     {
@@ -76,7 +92,7 @@ namespace Signum.Engine.Translation
             }
         }
 
-        public static void AddRoute<T, S>(Expression<Func<T, S>> propertyRoute) where T : IdentifiableEntity
+        public static void AddRoute<T, S>(Expression<Func<T, S>> propertyRoute) where T : Entity
         {
             AddRoute(PropertyRoute.Construct<T, S>(propertyRoute));
         }
@@ -84,7 +100,7 @@ namespace Signum.Engine.Translation
         public static void AddRoute(PropertyRoute route, TraducibleRouteType type = TraducibleRouteType.Text)
         {
             if (route.PropertyRouteType != PropertyRouteType.FieldOrProperty)
-                throw new InvalidOperationException("Routes of type {0} can not be traducibles".Formato(route.PropertyRouteType));
+                throw new InvalidOperationException("Routes of type {0} can not be traducibles".FormatWith(route.PropertyRouteType));
 
             if (route.Type != typeof(string))
                 throw new InvalidOperationException("Only string routes can be traducibles");
@@ -137,8 +153,8 @@ namespace Signum.Engine.Translation
         }
 
         static GenericInvoker<Func<PropertyRoute, Dictionary<LocalizedInstanceKey, string>>> giFromRoute =
-            new GenericInvoker<Func<PropertyRoute, Dictionary<LocalizedInstanceKey, string>>>(pr => FromRoute<IdentifiableEntity>(pr));
-        static Dictionary<LocalizedInstanceKey, string> FromRoute<T>(PropertyRoute pr) where T : IdentifiableEntity
+            new GenericInvoker<Func<PropertyRoute, Dictionary<LocalizedInstanceKey, string>>>(pr => FromRoute<Entity>(pr));
+        static Dictionary<LocalizedInstanceKey, string> FromRoute<T>(PropertyRoute pr) where T : Entity
         {
             var selector = pr.GetLambdaExpression<T, string>();
 
@@ -147,8 +163,8 @@ namespace Signum.Engine.Translation
         }
 
         static GenericInvoker<Func<PropertyRoute, Dictionary<LocalizedInstanceKey, string>>> giFromRouteMList =
-            new GenericInvoker<Func<PropertyRoute, Dictionary<LocalizedInstanceKey, string>>>(pr => FromRouteMList<IdentifiableEntity, string>(pr));
-        static Dictionary<LocalizedInstanceKey, string> FromRouteMList<T, M>(PropertyRoute pr) where T : IdentifiableEntity
+            new GenericInvoker<Func<PropertyRoute, Dictionary<LocalizedInstanceKey, string>>>(pr => FromRouteMList<Entity, string>(pr));
+        static Dictionary<LocalizedInstanceKey, string> FromRouteMList<T, M>(PropertyRoute pr) where T : Entity
         {
             var mListProperty = pr.GetMListItemsRoute().Parent.GetLambdaExpression<T, MList<M>>();
             var selector = pr.GetLambdaExpression<M, string>();
@@ -157,7 +173,7 @@ namespace Signum.Engine.Translation
                     select KVP.Create(new LocalizedInstanceKey(pr, mle.Parent.ToLite(), mle.RowId), selector.Evaluate(mle.Element))).ToDictionary();
         }
 
-        public static Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceDN>> TranslationsForType(Type type, CultureInfo culture)
+        public static Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceEntity>> TranslationsForType(Type type, CultureInfo culture)
         {
             return LocalizationCache.Value.Where(c => culture == null || c.Key.Equals(culture)).ToDictionary(
                 kvp => kvp.Key,
@@ -171,7 +187,7 @@ namespace Signum.Engine.Translation
                 if (!TraducibleRoutes.GetOrThrow(type).Keys.Any(pr => AnyNoTranslated(pr, ci)))
                     return TranslatedSummaryState.Completed;
 
-                if (Database.Query<TranslatedInstanceDN>().Count(ti => ti.PropertyRoute.RootType == type.ToTypeDN() && ti.Culture == ci.ToCultureInfoDN()) == 0)
+                if (Database.Query<TranslatedInstanceEntity>().Count(ti => ti.PropertyRoute.RootType == type.ToTypeEntity() && ti.Culture == ci.ToCultureInfoEntity()) == 0)
                     return TranslatedSummaryState.None;
 
                 return TranslatedSummaryState.Pending;
@@ -189,25 +205,25 @@ namespace Signum.Engine.Translation
         }
 
         static GenericInvoker<Func<PropertyRoute, CultureInfo, bool>> giAnyNoTranslated =
-            new GenericInvoker<Func<PropertyRoute, CultureInfo, bool>>((pr, ci) => AnyNoTranslated<IdentifiableEntity>(pr, ci));
-        static bool AnyNoTranslated<T>(PropertyRoute pr, CultureInfo ci) where T : IdentifiableEntity
+            new GenericInvoker<Func<PropertyRoute, CultureInfo, bool>>((pr, ci) => AnyNoTranslated<Entity>(pr, ci));
+        static bool AnyNoTranslated<T>(PropertyRoute pr, CultureInfo ci) where T : Entity
         {
             var exp = pr.GetLambdaExpression<T, string>();
 
             return (from e in Database.Query<T>()
                     let str = exp.Evaluate(e)
                     where str != null &&
-                    !Database.Query<TranslatedInstanceDN>().Any(ti =>
+                    !Database.Query<TranslatedInstanceEntity>().Any(ti =>
                         ti.Instance.RefersTo(e) &
                         ti.PropertyRoute.IsPropertyRoute(pr) &&
-                        ti.Culture == ci.ToCultureInfoDN() &&
+                        ti.Culture == ci.ToCultureInfoEntity() &&
                         ti.OriginalText == str)
                     select e).Any();
         }
 
         static GenericInvoker<Func<PropertyRoute, CultureInfo, bool>> giAnyNoTranslatedMList =
-           new GenericInvoker<Func<PropertyRoute, CultureInfo, bool>>((pr, ci) => AnyNoTranslatedMList<IdentifiableEntity, string>(pr, ci));
-        static bool AnyNoTranslatedMList<T, M>(PropertyRoute pr, CultureInfo ci) where T : IdentifiableEntity
+           new GenericInvoker<Func<PropertyRoute, CultureInfo, bool>>((pr, ci) => AnyNoTranslatedMList<Entity, string>(pr, ci));
+        static bool AnyNoTranslatedMList<T, M>(PropertyRoute pr, CultureInfo ci) where T : Entity
         {
             var mListProperty = pr.GetMListItemsRoute().Parent.GetLambdaExpression<T, MList<M>>();
 
@@ -216,44 +232,44 @@ namespace Signum.Engine.Translation
             return (from mle in Database.MListQuery(mListProperty)
                     let str = exp.Evaluate(mle.Element)
                     where str != null &&
-                    !Database.Query<TranslatedInstanceDN>().Any(ti =>
+                    !Database.Query<TranslatedInstanceEntity>().Any(ti =>
                         ti.Instance.RefersTo(mle.Parent) &&
                         ti.PropertyRoute.IsPropertyRoute(pr) &&
-                        ti.RowId == mle.RowId &&
-                        ti.Culture == ci.ToCultureInfoDN() &&
+                        ti.RowId == mle.RowId.ToString() &&
+                        ti.Culture == ci.ToCultureInfoEntity() &&
                         ti.OriginalText == str)
                     select mle).Any();
         }
 
         public static void CleanTranslations(Type t)
         {
-            var routes = TraducibleRoutes.GetOrThrow(t).Keys.Select(pr => pr.ToPropertyRouteDN()).Where(a => !a.IsNew).ToList();
+            var routes = TraducibleRoutes.GetOrThrow(t).Keys.Select(pr => pr.ToPropertyRouteEntity()).Where(a => !a.IsNew).ToList();
 
-            int deletedPr = Database.Query<TranslatedInstanceDN>().Where(a => a.PropertyRoute.RootType == t.ToTypeDN() && !routes.Contains(a.PropertyRoute)).UnsafeDelete();
+            int deletedPr = Database.Query<TranslatedInstanceEntity>().Where(a => a.PropertyRoute.RootType == t.ToTypeEntity() && !routes.Contains(a.PropertyRoute)).UnsafeDelete();
 
             int deletedInstance = giRemoveTranslationsForMissingEntities.GetInvoker(t)();
 
-            int deleteInconsistent = Database.Query<TranslatedInstanceDN>().Where(a => a.PropertyRoute.RootType == t.ToTypeDN() && (a.RowId != null) != a.PropertyRoute.Path.Contains("/")).UnsafeDelete();
+            int deleteInconsistent = Database.Query<TranslatedInstanceEntity>().Where(a => a.PropertyRoute.RootType == t.ToTypeEntity() && (a.RowId != null) != a.PropertyRoute.Path.Contains("/")).UnsafeDelete();
         }
 
-        static GenericInvoker<Func<int>> giRemoveTranslationsForMissingEntities = new GenericInvoker<Func<int>>(() => RemoveTranslationsForMissingEntities<IdentifiableEntity>());
-        static int RemoveTranslationsForMissingEntities<T>() where T : IdentifiableEntity
+        static GenericInvoker<Func<int>> giRemoveTranslationsForMissingEntities = new GenericInvoker<Func<int>>(() => RemoveTranslationsForMissingEntities<Entity>());
+        static int RemoveTranslationsForMissingEntities<T>() where T : Entity
         {
-            return (from ti in Database.Query<TranslatedInstanceDN>()
-                    where ti.PropertyRoute.RootType == typeof(T).ToTypeDN()
+            return (from ti in Database.Query<TranslatedInstanceEntity>()
+                    where ti.PropertyRoute.RootType == typeof(T).ToTypeEntity()
                     join e in Database.Query<T>().DefaultIfEmpty() on ti.Instance.Entity equals e
                     where e == null
                     select ti).UnsafeDelete();
         }
 
-        public static string TranslatedField<T>(this T entity, Expression<Func<T, string>> property) where T : IdentifiableEntity
+        public static string TranslatedField<T>(this T entity, Expression<Func<T, string>> property) where T : Entity
         {
             string fallbackString = TranslatedInstanceLogic.GetPropertyRouteAccesor(property)(entity);
 
             return entity.ToLite().TranslatedField(property, fallbackString);
         }
 
-        public static IEnumerable<TranslatableElement<T>> TranslatedMList<E, T>(this E entity, Expression<Func<E, MList<T>>> mlistProperty) where E : IdentifiableEntity
+        public static IEnumerable<TranslatableElement<T>> TranslatedMList<E, T>(this E entity, Expression<Func<E, MList<T>>> mlistProperty) where E : Entity
         {
             var mlist = GetPropertyRouteAccesor(mlistProperty);
 
@@ -276,19 +292,19 @@ namespace Signum.Engine.Translation
             return TranslatedField(element.Lite, route, element.RowId, fallback);
         }
 
-        public static string TranslatedField<T>(this Lite<T> lite, Expression<Func<T, string>> property, string fallbackString) where T : IdentifiableEntity
+        public static string TranslatedField<T>(this Lite<T> lite, Expression<Func<T, string>> property, string fallbackString) where T : Entity
         {
             PropertyRoute route = PropertyRoute.Construct(property);
 
             return TranslatedField(lite, route, fallbackString);
         }
 
-        public static string TranslatedField(Lite<IdentifiableEntity> lite, PropertyRoute route, string fallbackString)
+        public static string TranslatedField(Lite<Entity> lite, PropertyRoute route, string fallbackString)
         {
             return TranslatedField(lite, route, null, fallbackString);
         }
 
-        public static string TranslatedField(Lite<IdentifiableEntity> lite, PropertyRoute route, int? rowId, string fallbackString)
+        public static string TranslatedField(Lite<Entity> lite, PropertyRoute route, PrimaryKey? rowId, string fallbackString)
         {
             var result = TranslatedInstanceLogic.GetTranslatedInstance(lite, route, rowId);
 
@@ -299,18 +315,18 @@ namespace Signum.Engine.Translation
         }
 
 
-        public static TranslatedInstanceDN GetTranslatedInstance(Lite<IdentifiableEntity> lite, PropertyRoute route, int? rowId)
+        public static TranslatedInstanceEntity GetTranslatedInstance(Lite<Entity> lite, PropertyRoute route, PrimaryKey? rowId)
         {
             var hastMList = route.GetMListItemsRoute() != null;
 
             if (hastMList && !rowId.HasValue)
-                throw new InvalidOperationException("Route {0} has MList so rowId should have a value".Formato(route));
+                throw new InvalidOperationException("Route {0} has MList so rowId should have a value".FormatWith(route));
 
             if (!hastMList && rowId.HasValue)
-                throw new InvalidOperationException("Route {0} has not MList so rowId should be null".Formato(route));
+                throw new InvalidOperationException("Route {0} has not MList so rowId should be null".FormatWith(route));
 
             if (route.RootType != lite.EntityType)
-                throw new InvalidOperationException("Route {0} belongs to type {1}, not {2}".Formato(route, route.RootType.TypeName(), lite.EntityType.TypeName()));
+                throw new InvalidOperationException("Route {0} belongs to type {1}, not {2}".FormatWith(route, route.RootType.TypeName(), lite.EntityType.TypeName()));
 
             var key = new LocalizedInstanceKey(route, lite, rowId);
 
@@ -331,15 +347,15 @@ namespace Signum.Engine.Translation
         }
 
 
-        public static T SaveTranslation<T>(this T entity, CultureInfoDN ci, Expression<Func<T, string>> propertyRoute, string translatedText)
-            where T : IdentifiableEntity
+        public static T SaveTranslation<T>(this T entity, CultureInfoEntity ci, Expression<Func<T, string>> propertyRoute, string translatedText)
+            where T : Entity
         {
             entity.Save();
 
             if (translatedText.HasText())
-                new TranslatedInstanceDN
+                new TranslatedInstanceEntity
                 {
-                    PropertyRoute = PropertyRoute.Construct(propertyRoute).ToPropertyRouteDN(),
+                    PropertyRoute = PropertyRoute.Construct(propertyRoute).ToPropertyRouteEntity(),
                     Culture = ci,
                     TranslatedText = translatedText,
                     OriginalText = GetPropertyRouteAccesor(propertyRoute)(entity),
@@ -367,7 +383,7 @@ namespace Signum.Engine.Translation
             {
                 Instance = r.Key.Instance.Key(),
                 Path = r.Key.Route.PropertyString(),
-                RowId = r.Key.RowId,
+                RowId = r.Key.RowId.TryToString(),
                 Original = r.Value.OriginalText,
                 Translated = r.Value.TranslatedText
             }).ToList();
@@ -375,7 +391,7 @@ namespace Signum.Engine.Translation
             return new FilePair
             {
                 Content = PlainExcelGenerator.WritePlainExcel<ExcelRow>(list),
-                FileName = "{0}.{1}.View.xlsx".Formato(type, culture.Name)
+                FileName = "{0}.{1}.View.xlsx".FormatWith(type, culture.Name)
             };
         }
 
@@ -390,7 +406,7 @@ namespace Signum.Engine.Translation
                         {
                             Instance = ic.Instance.Key(),
                             Path = pr.Key.Route.PropertyString(),
-                            RowId = pr.Key.RowId,
+                            RowId = pr.Key.RowId.TryToString(),
                             Original = pr.Value.GetOrThrow(TranslatedInstanceLogic.DefaultCulture).Original,
                             Translated = null
                         }).ToList();
@@ -398,7 +414,7 @@ namespace Signum.Engine.Translation
             return new FilePair
             {
                 Content = PlainExcelGenerator.WritePlainExcel<ExcelRow>(list),
-                FileName = "{0}.{1}.Sync.xlsx".Formato(type, culture.Name)
+                FileName = "{0}.{1}.Sync.xlsx".FormatWith(type, culture.Name)
             };
         }
 
@@ -415,10 +431,12 @@ namespace Signum.Engine.Translation
 
             var records = PlainExcelGenerator.ReadPlainExcel(stream, cellValues => new TranslationRecord
             {
-                 Culture = culture,
-                 Key = new LocalizedInstanceKey(PropertyRoute.Parse(type, cellValues[1]), Lite.Parse<IdentifiableEntity>(cellValues[0]), cellValues[2].DefaultText(null).Try(int.Parse)),
-                 OriginalText = cellValues[3],
-                 TranslatedText = cellValues[4]
+                Culture = culture,
+                Key = new LocalizedInstanceKey(PropertyRoute.Parse(type, cellValues[1]),
+                    Lite.Parse<Entity>(cellValues[0]),
+                    cellValues[2].DefaultText(null).Try(s => PrimaryKey.Parse(s, type))),
+                OriginalText = cellValues[3],
+                TranslatedText = cellValues[4]
             });
 
             SaveRecords(records, type, culture);
@@ -429,9 +447,9 @@ namespace Signum.Engine.Translation
 
         public static List<InstanceChanges> GetInstanceChanges(Type type, CultureInfo targetCulture, List<CultureInfo> cultures)
         {
-            Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceDN>> support = TranslatedInstanceLogic.TranslationsForType(type, culture: null);
+            Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceEntity>> support = TranslatedInstanceLogic.TranslationsForType(type, culture: null);
 
-            Dictionary<LocalizedInstanceKey, TranslatedInstanceDN> target = support.TryGetC(targetCulture);
+            Dictionary<LocalizedInstanceKey, TranslatedInstanceEntity> target = support.TryGetC(targetCulture);
 
             var instances = TranslatedInstanceLogic.FromEntities(type).GroupBy(a => a.Key.Instance).Select(gr =>
             {
@@ -481,24 +499,24 @@ namespace Signum.Engine.Translation
             Dictionary<Tuple<CultureInfo, LocalizedInstanceKey>, TranslationRecord> should = records.Where(a => a.TranslatedText.HasText())
                 .ToDictionary(a => Tuple.Create(a.Culture, a.Key));
 
-            Dictionary<Tuple<CultureInfo, LocalizedInstanceKey>, TranslatedInstanceDN> current =
+            Dictionary<Tuple<CultureInfo, LocalizedInstanceKey>, TranslatedInstanceEntity> current =
                 (from ci in TranslatedInstanceLogic.TranslationsForType(t, c)
                  from key in ci.Value
                  select KVP.Create(Tuple.Create(ci.Key, key.Key), key.Value)).ToDictionary();
 
             using (Transaction tr = new Transaction())
             {
-                Dictionary<PropertyRoute, PropertyRouteDN> routes = should.Keys.Select(a => a.Item2.Route).Distinct().ToDictionary(a => a, a => a.ToPropertyRouteDN());
+                Dictionary<PropertyRoute, PropertyRouteEntity> routes = should.Keys.Select(a => a.Item2.Route).Distinct().ToDictionary(a => a, a => a.ToPropertyRouteEntity());
 
                 Synchronizer.Synchronize(
                     should,
                     current,
-                    (k, n) => new TranslatedInstanceDN
+                    (k, n) => new TranslatedInstanceEntity
                     {
-                        Culture = n.Culture.ToCultureInfoDN(),
+                        Culture = n.Culture.ToCultureInfoEntity(),
                         PropertyRoute = routes.GetOrThrow(n.Key.Route),
                         Instance = n.Key.Instance,
-                        RowId  = n.Key.RowId,
+                        RowId  = n.Key.RowId.TryToString(),
                         OriginalText = n.OriginalText,
                         TranslatedText = n.TranslatedText,
                     }.Save(),
@@ -541,12 +559,12 @@ namespace Signum.Engine.Translation
 
     public struct TranslatableElement<T>
     {
-        public readonly Lite<IdentifiableEntity> Lite;
+        public readonly Lite<Entity> Lite;
         public readonly PropertyRoute ElementRoute;
         public readonly T Value;
-        public readonly int RowId;
+        public readonly PrimaryKey RowId;
 
-        internal TranslatableElement(Lite<IdentifiableEntity> entity, PropertyRoute route, MList<T>.RowIdValue item)
+        internal TranslatableElement(Lite<Entity> entity, PropertyRoute route, MList<T>.RowIdValue item)
         {
             this.Lite = entity;
             this.ElementRoute = route;
@@ -564,19 +582,19 @@ namespace Signum.Engine.Translation
 
         public override string ToString()
         {
-            return "{0} {1} {2} -> {3}".Formato(Culture, Key.Instance, Key.Route, TranslatedText);
+            return "{0} {1} {2} -> {3}".FormatWith(Culture, Key.Instance, Key.Route, TranslatedText);
         }
     }
 
     public class InstanceChanges
     {
-        public Lite<IdentifiableEntity> Instance { get; set; }
+        public Lite<Entity> Instance { get; set; }
 
         public Dictionary<IndexedPropertyRoute, Dictionary<CultureInfo, PropertyRouteConflict>> RouteConflicts { get; set; }
 
         public override string ToString()
         {
-            return "Changes for {0}".Formato(Instance);
+            return "Changes for {0}".FormatWith(Instance);
         }
 
         public int TotalOriginalLength()
@@ -588,9 +606,9 @@ namespace Signum.Engine.Translation
     public struct IndexedPropertyRoute : IEquatable<IndexedPropertyRoute>
     {
         public readonly PropertyRoute Route;
-        public readonly int? RowId;
+        public readonly PrimaryKey? RowId;
 
-        public IndexedPropertyRoute(PropertyRoute route, int? rowId)
+        public IndexedPropertyRoute(PropertyRoute route, PrimaryKey? rowId)
         {
             this.Route = route;
             this.RowId = rowId;
@@ -627,7 +645,7 @@ namespace Signum.Engine.Translation
 
         public override string ToString()
         {
-            return "Conflict {0} -> {1}".Formato(Original, AutomaticTranslation);
+            return "Conflict {0} -> {1}".FormatWith(Original, AutomaticTranslation);
         }
     }
 
@@ -635,7 +653,7 @@ namespace Signum.Engine.Translation
     {
         public string Instance; 
         public string Path;
-        public int? RowId; 
+        public string RowId; 
         public string Original; 
         public string Translated; 
     }
@@ -643,10 +661,10 @@ namespace Signum.Engine.Translation
     public struct LocalizedInstanceKey : IEquatable<LocalizedInstanceKey>
     {
         public readonly PropertyRoute Route;
-        public readonly Lite<IdentifiableEntity> Instance;
-        public readonly int? RowId; 
+        public readonly Lite<Entity> Instance;
+        public readonly PrimaryKey? RowId; 
 
-        public LocalizedInstanceKey(PropertyRoute route, Lite<IdentifiableEntity> instance, int? rowId)
+        public LocalizedInstanceKey(PropertyRoute route, Lite<Entity> instance, PrimaryKey? rowId)
         {
             if (route == null) throw new ArgumentNullException("route");
             if (instance == null) throw new ArgumentNullException("entity");
@@ -671,7 +689,7 @@ namespace Signum.Engine.Translation
 
         public override string ToString()
         {
-            var result = "{0} {1}".Formato(Route, Instance);
+            var result = "{0} {1}".FormatWith(Route, Instance);
 
             if (RowId.HasValue)
                 result += " " + RowId;

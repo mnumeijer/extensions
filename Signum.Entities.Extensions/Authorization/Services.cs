@@ -14,16 +14,16 @@ namespace Signum.Services
     public interface ILoginServer
     {
         [OperationContract, NetDataContract]
-        void Login(string username, string passwordHash);
+        void Login(string username, byte[] passwordHash);
 
         [OperationContract, NetDataContract]
-        void LoginChagePassword(string username, string passwordHash, string newPasswordHash);
+        void LoginChagePassword(string username, byte[] passwordHash, byte[] newPasswordHash);
 
         [OperationContract, NetDataContract]
-        void ChagePassword(Lite<UserDN> user, string passwordHash, string newPasswordHash);
+        void ChagePassword(Lite<UserEntity> user, byte[] passwordHash, byte[] newPasswordHash);
 
         [OperationContract, NetDataContract]
-        UserDN GetCurrentUser();
+        UserEntity GetCurrentUser();
 
         [OperationContract, NetDataContract]
         string PasswordNearExpired();
@@ -36,7 +36,7 @@ namespace Signum.Services
     public interface ITypeAuthServer
     {
         [OperationContract, NetDataContract]
-        TypeRulePack GetTypesRules(Lite<RoleDN> role);
+        TypeRulePack GetTypesRules(Lite<RoleEntity> role);
 
         [OperationContract, NetDataContract]
         void SetTypesRules(TypeRulePack rules);
@@ -45,14 +45,14 @@ namespace Signum.Services
         DefaultDictionary<Type, TypeAllowedAndConditions> AuthorizedTypes();
 
         [OperationContract, NetDataContract]
-        bool IsAllowedForInUserInterface(Lite<IIdentifiable> lite, TypeAllowedBasic allowed);
+        bool IsAllowedForInUserInterface(Lite<IEntity> lite, TypeAllowedBasic allowed);
     }
 
     [ServiceContract]
     public interface IPermissionAuthServer
     {
         [OperationContract, NetDataContract]
-        PermissionRulePack GetPermissionRules(Lite<RoleDN> role);
+        PermissionRulePack GetPermissionRules(Lite<RoleEntity> role);
 
         [OperationContract, NetDataContract]
         void SetPermissionRules(PermissionRulePack rules);
@@ -65,7 +65,7 @@ namespace Signum.Services
     public interface IPropertyAuthServer
     {
         [OperationContract, NetDataContract]
-        PropertyRulePack GetPropertyRules(Lite<RoleDN> role, TypeDN typeDN);
+        PropertyRulePack GetPropertyRules(Lite<RoleEntity> role, TypeEntity typeEntity);
 
         [OperationContract, NetDataContract]
         void SetPropertyRules(PropertyRulePack rules);
@@ -78,7 +78,7 @@ namespace Signum.Services
     public interface IQueryAuthServer
     {
         [OperationContract, NetDataContract]
-        QueryRulePack GetQueryRules(Lite<RoleDN> role, TypeDN typeDN);
+        QueryRulePack GetQueryRules(Lite<RoleEntity> role, TypeEntity typeEntity);
 
         [OperationContract, NetDataContract]
         void SetQueryRules(QueryRulePack rules);
@@ -91,7 +91,7 @@ namespace Signum.Services
     public interface IOperationAuthServer
     {
         [OperationContract, NetDataContract]
-        OperationRulePack GetOperationRules(Lite<RoleDN> role, TypeDN typeDN);
+        OperationRulePack GetOperationRules(Lite<RoleEntity> role, TypeEntity typeEntity);
 
         [OperationContract, NetDataContract]
         void SetOperationRules(OperationRulePack rules);

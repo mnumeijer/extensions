@@ -11,6 +11,7 @@ using Signum.Utilities.DataStructures;
 using Signum.Entities;
 using Signum.Utilities;
 using System.IO;
+using Signum.Engine.Operations;
 
 namespace Signum.Engine.Authorization
 {
@@ -28,10 +29,10 @@ namespace Signum.Engine.Authorization
                 IsStarted = true;
 
                 AuthLogic.AssertStarted(sb);
-                sb.Include<UserTicketDN>();
+                sb.Include<UserTicketEntity>();
 
-                dqm.RegisterQuery(typeof(UserTicketDN), () =>
-                    from ut in Database.Query<UserTicketDN>()
+                dqm.RegisterQuery(typeof(UserTicketEntity), () =>
+                    from ut in Database.Query<UserTicketEntity>()
                     select new
                     {
                         Entity = ut,
@@ -42,13 +43,21 @@ namespace Signum.Engine.Authorization
                         ut.Device,
                     });
 
-                dqm.RegisterExpression((UserDN u) => u.UserTickets(), () => typeof(UserTicketDN).NicePluralName());
+                dqm.RegisterExpression((UserEntity u) => u.UserTickets(), () => typeof(UserTicketEntity).NicePluralName());
+
+                sb.Schema.EntityEvents<UserEntity>().Saving += UserTicketLogic_Saving; 
             }
         }
 
-        static Expression<Func<UserDN, IQueryable<UserTicketDN>>> UserTicketsExpression =
-            u => Database.Query<UserTicketDN>().Where(ut => ut.User == u.ToLite());
-        public static IQueryable<UserTicketDN> UserTickets(this UserDN u)
+        static void UserTicketLogic_Saving(UserEntity user)
+        {
+            if (!user.IsNew && user.IsGraphModified & user.InDBEntity(u => u.PasswordHash != user.PasswordHash))
+                user.UserTickets().UnsafeDelete();
+        }
+
+        static Expression<Func<UserEntity, IQueryable<UserTicketEntity>>> UserTicketsExpression =
+            u => Database.Query<UserTicketEntity>().Where(ut => ut.User == u.ToLite());
+        public static IQueryable<UserTicketEntity> UserTickets(this UserEntity u)
         {
             return UserTicketsExpression.Evaluate(u);
         }
@@ -58,11 +67,11 @@ namespace Signum.Engine.Authorization
             using (AuthLogic.Disable())
             using (Transaction tr = new Transaction())
             {
-                CleanExpiredTickets(UserDN.Current);
+                CleanExpiredTickets(UserEntity.Current);
 
-                UserTicketDN result = new UserTicketDN
+                UserTicketEntity result = new UserTicketEntity
                 {
-                    User = UserDN.Current.ToLite(),
+                    User = UserEntity.Current.ToLite(),
                     Device = device,
                     ConnectionDate = TimeZoneManager.Now,
                     Ticket = Guid.NewGuid().ToString(),
@@ -75,25 +84,23 @@ namespace Signum.Engine.Authorization
 
         }
 
-        public static UserDN UpdateTicket(string device, ref string ticket)
+        public static UserEntity UpdateTicket(string device, ref string ticket)
         {
             using (AuthLogic.Disable())
             using (Transaction tr = new Transaction())
             {
-                Tuple<int, string> pair = UserTicketDN.ParseTicket(ticket);
+                Tuple<PrimaryKey, string> pair = UserTicketEntity.ParseTicket(ticket);
 
-                UserDN user = Database.Retrieve<UserDN>(pair.Item1);
+                UserEntity user = Database.Retrieve<UserEntity>(pair.Item1);
                 CleanExpiredTickets(user);
 
-
-                UserTicketDN userTicket = user.UserTickets().SingleOrDefaultEx(t => t.Ticket == pair.Item2);
+                UserTicketEntity userTicket = user.UserTickets().SingleOrDefaultEx(t => t.Ticket == pair.Item2);
                 if (userTicket == null)
                 {
-                    throw new UnauthorizedAccessException("User attempted to log in with an invalid ticket");
+                    throw new UnauthorizedAccessException("User attempted to log-in with an invalid ticket");
                 }
-
                 
-                UserTicketDN result = new UserTicketDN
+                UserTicketEntity result = new UserTicketEntity
                 {
                     User = user.ToLite(),
                     Device = device,
@@ -108,7 +115,7 @@ namespace Signum.Engine.Authorization
         }
 
 
-        static int CleanExpiredTickets(UserDN user)
+        static int CleanExpiredTickets(UserEntity user)
         {
             DateTime min = TimeZoneManager.Now.Subtract(ExpirationInterval);
 

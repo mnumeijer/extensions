@@ -37,7 +37,7 @@ namespace Signum.Windows.UIAutomation
 
         public override string ToString()
         {
-            return "{0} {1}".Formato(GetType().Name, PropertyRoute == null ? PropertyRouteString.DefaultText("Unknown") : PropertyRoute.ToString());
+            return "{0} {1}".FormatWith(GetType().Name, PropertyRoute == null ? PropertyRouteString.DefaultText("Unknown") : PropertyRoute.ToString());
         }
     }
 
@@ -73,7 +73,7 @@ namespace Signum.Windows.UIAutomation
                     case "CheckBox":
                         return ValueControl.GetCheckState().TryToString();
                     default:
-                        throw new NotImplementedException("Unexpected Value Control of type {0}".Formato(ValueControl.Current.ClassName));
+                        throw new NotImplementedException("Unexpected Value Control of type {0}".FormatWith(ValueControl.Current.ClassName));
                 }
             }
 
@@ -100,7 +100,7 @@ namespace Signum.Windows.UIAutomation
                         ValueControl.SetCheck(value == "True");
                         break;
                     default:
-                        throw new NotImplementedException("Unexpected Value Control of type {0}".Formato(ValueControl.Current.ClassName));
+                        throw new NotImplementedException("Unexpected Value Control of type {0}".FormatWith(ValueControl.Current.ClassName));
                 }
             }
         }
@@ -167,7 +167,7 @@ namespace Signum.Windows.UIAutomation
         {
         }
 
-        public Lite<IIdentifiable> LiteValue
+        public Lite<IEntity> LiteValue
         {
             get
             {
@@ -184,12 +184,12 @@ namespace Signum.Windows.UIAutomation
             }
         }
 
-        public void FindLite(Lite<IIdentifiable> value)
+        public void FindLite(Lite<IEntity> value)
         {
             AssertCompatibleLite(value);
 
             if (Element.TryChildById("btFind") == null)
-                throw new InvalidOperationException("The {0} {1} has no find button to complete the search for {2}".Formato(GetType().Name, this, value.KeyLong())); 
+                throw new InvalidOperationException("The {0} {1} has no find button to complete the search for {2}".FormatWith(GetType().Name, this, value.KeyLong())); 
 
             var win = FindCapture();
 
@@ -210,12 +210,12 @@ namespace Signum.Windows.UIAutomation
             }
         }
 
-        private void AssertCompatibleLite(Lite<IIdentifiable> value)
+        private void AssertCompatibleLite(Lite<IEntity> value)
         {
             var imps = GetImplementations();
             
             if (!imps.IsByAll && !imps.Types.Contains(value.EntityType))
-                throw new InvalidOperationException("Lite of type {0} can not be set on {1} {2} {3}".Formato(value.EntityType.TypeName(), GetType().TypeName(), PropertyRoute, imps));
+                throw new InvalidOperationException("Lite of type {0} can not be set on {1} {2} {3}".FormatWith(value.EntityType.TypeName(), GetType().TypeName(), PropertyRoute, imps));
         }
 
         public virtual Implementations GetImplementations()
@@ -223,7 +223,7 @@ namespace Signum.Windows.UIAutomation
             return PropertyRoute.GetImplementations();
         }
 
-        protected virtual bool FastSelect(Lite<IIdentifiable> value)
+        protected virtual bool FastSelect(Lite<IEntity> value)
         {
             return false;
         }
@@ -240,11 +240,11 @@ namespace Signum.Windows.UIAutomation
         public AutomationElement CreateCapture(int? timeOut = null)
         {
             if (CreateButton.Current.IsOffscreen)
-                throw new InvalidOperationException("CreateButton is not visible on {0}".Formato(this));
+                throw new InvalidOperationException("CreateButton is not visible on {0}".FormatWith(this));
 
             var win = Element.CaptureWindow(
                 () => CreateButton.ButtonInvoke(),
-                () => "Create a new entity on {0}".Formato(this), timeOut ?? NormalWindowTimeout);
+                () => "Create a new entity on {0}".FormatWith(this), timeOut ?? NormalWindowTimeout);
             return win;
         }
 
@@ -262,7 +262,7 @@ namespace Signum.Windows.UIAutomation
             SearchWindowProxy.Select(win, index);
         }
 
-        public void FindSelectId(int id, int? timeOut = null)
+        public void FindSelectId(PrimaryKey id, int? timeOut = null)
         {
             var win = FindCapture(timeOut);
             using (var searchWindow = new SearchWindowProxy(win))
@@ -289,11 +289,11 @@ namespace Signum.Windows.UIAutomation
         public AutomationElement FindCapture(int? timeOut = null)
         {
             if (FindButton.Current.IsOffscreen)
-                throw new InvalidOperationException("FindButton is not visible on {0}".Formato(this));
+                throw new InvalidOperationException("FindButton is not visible on {0}".FormatWith(this));
 
             var win = Element.CaptureWindow(
                 () => FindButton.ButtonInvoke(),
-                () => "Search entity on {0}".Formato(this), timeOut ?? SearchWindowTimeout);
+                () => "Search entity on {0}".FormatWith(this), timeOut ?? SearchWindowTimeout);
             return win;
         }
 
@@ -307,11 +307,11 @@ namespace Signum.Windows.UIAutomation
         public AutomationElement ViewCapture(int? timeOut = null)
         {
             if (ViewButton.Current.IsOffscreen)
-                throw new InvalidOperationException("ViewButton is not visible on {0}".Formato(this));
+                throw new InvalidOperationException("ViewButton is not visible on {0}".FormatWith(this));
 
             var win = Element.CaptureWindow(
                 () => ViewButton.ButtonInvoke(),
-                () => "View entity on {0}".Formato(this), timeOut ?? NormalWindowTimeout);
+                () => "View entity on {0}".FormatWith(this), timeOut ?? NormalWindowTimeout);
             return win;
         }
 
@@ -330,7 +330,7 @@ namespace Signum.Windows.UIAutomation
         public void Remove()
         {
             if (RemoveButton.Current.IsOffscreen)
-                throw new InvalidOperationException("RemoveButton is not visible on {0}".Formato(this));
+                throw new InvalidOperationException("RemoveButton is not visible on {0}".FormatWith(this));
 
             RemoveButton.ButtonInvoke();
         }
@@ -364,7 +364,7 @@ namespace Signum.Windows.UIAutomation
             lb.SelectListItemByName(toString, () => this.ToString());
         }
 
-        protected override bool FastSelect(Lite<IIdentifiable> value)
+        protected override bool FastSelect(Lite<IEntity> value)
         {
             if (!value.ToString().HasText())
                 return false;
@@ -399,7 +399,7 @@ namespace Signum.Windows.UIAutomation
         {
         }
 
-        public void SelectLite(Lite<IIdentifiable> lite)
+        public void SelectLite(Lite<IEntity> lite)
         {
             ComboBox.ComboSelectItem(a => a.Current.ItemStatus == lite.Key());
         }
@@ -411,7 +411,7 @@ namespace Signum.Windows.UIAutomation
             ComboBox.SelectListItemByName(toString, ()=>this.ToString());
         }
 
-        protected override bool FastSelect(Lite<IIdentifiable> lite)
+        protected override bool FastSelect(Lite<IEntity> lite)
         {
             ComboBox.Pattern<ExpandCollapsePattern>().Expand();
 
@@ -427,7 +427,7 @@ namespace Signum.Windows.UIAutomation
 
         public void WaitHasItems(int? timeOut = null)
         {
-            ComboBox.WaitComboBoxHasItems(() => "EntityCombo {0} has items".Formato(this), timeOut);
+            ComboBox.WaitComboBoxHasItems(() => "EntityCombo {0} has items".FormatWith(this), timeOut);
         }
 
         public void SelectFirstElement()
@@ -516,7 +516,7 @@ namespace Signum.Windows.UIAutomation
             var list = ListBox.ChildrenAll();
 
             if (list.Count <= index)
-                throw new InvalidOperationException("Index {0} not found on {1} with only {2} items".Formato(index, this, list.Count));
+                throw new InvalidOperationException("Index {0} not found on {1} with only {2} items".FormatWith(index, this, list.Count));
 
             list[index].Pattern<SelectionItemPattern>().Select();
         }

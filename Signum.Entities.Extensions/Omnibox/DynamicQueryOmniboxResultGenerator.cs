@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,7 +30,7 @@ namespace Signum.Entities.Omnibox
             }).ToList();
         }
          
-        Regex regex = new Regex(@"^I(?<filter>(?<token>I(\.I)*)(\.|((?<op>=)(?<val>[ENSI])?))?)*$", RegexOptions.ExplicitCapture);
+        Regex regex = new Regex(@"^I(?<filter>(?<token>I(\.I)*)(\.|((?<op>=)(?<val>[ENSIG])?))?)*$", RegexOptions.ExplicitCapture);
        
         public override IEnumerable<DynamicQueryOmniboxResult> GetResults(string rawQuery, List<OmniboxToken> tokens, string tokenPattern)
         {   
@@ -259,22 +259,19 @@ namespace Signum.Entities.Omnibox
                     }
                     else if (omniboxToken.Type == OmniboxTokenType.Entity)
                     {
-                        Lite<IdentifiableEntity> lite;
+                        Lite<Entity> lite;
                         var error = Lite.TryParseLite(omniboxToken.Value, out lite);
                         if(string.IsNullOrEmpty(error))
                             return new []{new ValueTuple { Value = lite }}; 
                     }
                     else if (omniboxToken.Type == OmniboxTokenType.Number)
                     {
-                        int id;
-                        if (int.TryParse(omniboxToken.Value, out id))
-                        {
-                            var imp = queryToken.GetImplementations().Value;
+                        var imp = queryToken.GetImplementations().Value;
 
-                            if (!imp.IsByAll)
-                            {
-                                return imp.Types.Select(t =>new ValueTuple { Value = CreateLite(t, id) }).ToArray();
-                            }
+                        if (!imp.IsByAll)
+                        {
+                            return imp.Types.Select(t => CreateLite(t, omniboxToken.Value))
+                                .NotNull().Select(t => new ValueTuple { Value = t }).ToArray();
                         }
                     }break;
                 case FilterType.Embedded:
@@ -300,7 +297,13 @@ namespace Signum.Entities.Omnibox
                     }
                     break;
                 case FilterType.Guid:
-                    if (omniboxToken.Type == OmniboxTokenType.String)
+                    if (omniboxToken.Type == OmniboxTokenType.Guid)
+                    {
+                        Guid result;
+                        if (Guid.TryParse(omniboxToken.Value, out result))
+                            return new[] { new ValueTuple { Value = result, Match = null } };
+                    }
+                    else if (omniboxToken.Type == OmniboxTokenType.String)
                     {
                         var str = OmniboxUtils.CleanCommas(omniboxToken.Value);
                         Guid result;
@@ -314,9 +317,13 @@ namespace Signum.Entities.Omnibox
             return new[] { new ValueTuple { Value = UnknownValue, Match = null } };
         }
 
-        Lite<IdentifiableEntity> CreateLite(Type type, int id)
+        Lite<Entity> CreateLite(Type type, string value)
         {
-            return Lite.Create(type, id, "{0} {1}".Formato(type.NiceName(), id));
+            PrimaryKey id;
+            if (PrimaryKey.TryParse(value, type, out id))
+                return Lite.Create(type, id, "{0} {1}".FormatWith(type.NiceName(), id));
+
+            return null;
         }
 
         bool? ParseBool(string val)
@@ -369,14 +376,14 @@ namespace Signum.Entities.Omnibox
 
                 case FilterType.String: return "\"" + p.ToString() + "\"";
                 case FilterType.DateTime: return "'" + p.ToString() + "'";
-                case FilterType.Lite: return ((Lite<IdentifiableEntity>)p).Key();
+                case FilterType.Lite: return ((Lite<Entity>)p).Key();
                 case FilterType.Embedded: throw new InvalidOperationException("Impossible to translate not null Embedded entity to string");
                 case FilterType.Boolean: return p.ToString();
                 case FilterType.Enum: return ((Enum)p).NiceToString().SpacePascal();
                 case FilterType.Guid: return "\"" + p.ToString() + "\"";
             }
 
-            throw new InvalidOperationException("Unexpected value type {0}".Formato(p.GetType()));
+            throw new InvalidOperationException("Unexpected value type {0}".FormatWith(p.GetType()));
         }
 
         public override List<HelpOmniboxResult> GetHelp()
@@ -389,9 +396,9 @@ namespace Signum.Entities.Omnibox
 
             return new List<HelpOmniboxResult>
             {
-                new HelpOmniboxResult { Text = "{0}".Formato(queryName), OmniboxResultType = resultType },
-                new HelpOmniboxResult { Text = "{0} {1}='{2}'".Formato(queryName, field, value), OmniboxResultType = resultType },
-                new HelpOmniboxResult { Text = "{0} {1}1='{2}1' {1}2='{2}2'".Formato(queryName, field, value), OmniboxResultType = resultType },
+                new HelpOmniboxResult { Text = "{0}".FormatWith(queryName), OmniboxResultType = resultType },
+                new HelpOmniboxResult { Text = "{0} {1}='{2}'".FormatWith(queryName, field, value), OmniboxResultType = resultType },
+                new HelpOmniboxResult { Text = "{0} {1}1='{2}1' {1}2='{2}2'".FormatWith(queryName, field, value), OmniboxResultType = resultType },
             };
         }
     }

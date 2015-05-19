@@ -9,7 +9,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace Signum.Web.Extensions.Mailing.Views
+namespace Signum.Web.Mailing.Views
 {
     using System;
     using System.Collections.Generic;
@@ -49,7 +49,7 @@ WriteLiteral("\r\n");
 
             
             #line 3 "..\..\Mailing\Views\EmailAddress.cshtml"
- using (var sc = Html.TypeContext<EmailAddressDN>())
+ using (var sc = Html.TypeContext<EmailAddressEntity>())
 {
     sc.PlaceholderLabels = true;
     sc.FormGroupStyle = FormGroupStyle.SrOnly;
@@ -63,7 +63,7 @@ WriteLiteral(" class=\"row form-vertical\"");
 
 WriteLiteral(">\r\n        <div");
 
-WriteLiteral(" class=\"col-sm-4 col-sm-offset-1\"");
+WriteLiteral(" class=\"col-sm-4 col-sm-offset-2\"");
 
 WriteLiteral(">\r\n");
 
@@ -86,7 +86,7 @@ WriteLiteral("                ");
 
             
             #line 12 "..\..\Mailing\Views\EmailAddress.cshtml"
-           Write(Html.ValueLine(sc, c => c.EmailAddress));
+           Write(Html.ValueLine(sc, c => c.EmailAddress, vl=> vl.ValueHtmlProps.Remove("size")));
 
             
             #line default
@@ -101,7 +101,7 @@ WriteLiteral("               ");
 
             
             #line 15 "..\..\Mailing\Views\EmailAddress.cshtml"
-          Write(Html.ValueLine(sc, c => c.DisplayName, vl => vl.ValueHtmlProps.Add("style", "width:250px")));
+          Write(Html.ValueLine(sc, c => c.DisplayName));
 
             
             #line default

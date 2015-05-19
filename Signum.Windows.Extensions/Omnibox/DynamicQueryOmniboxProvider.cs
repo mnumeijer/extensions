@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -32,20 +32,20 @@ namespace Signum.Windows.Omnibox
                     var operation = f.Operation;
                     if (operation != null && !QueryUtils.GetFilterOperations(ft).Contains(f.Operation.Value))
                     {
-                        MessageBox.Show(window, "Operation {0} not compatible with {1}".Formato(operation, f.QueryToken.ToString()));
+                        MessageBox.Show(window, "Operation {0} not compatible with {1}".FormatWith(operation, f.QueryToken.ToString()));
                         operation = FilterOperation.EqualTo;
                     }
 
                     object value = f.Value;
                     if (value == DynamicQueryOmniboxResultGenerator.UnknownValue)
                     {
-                        MessageBox.Show(window, "Unknown value for {0}".Formato(f.QueryToken.ToString()));
+                        MessageBox.Show(window, "Unknown value for {0}".FormatWith(f.QueryToken.ToString()));
                         value = null;
                     }
                     else
                     {
-                        if (value is Lite<IIdentifiable>)
-                            Server.FillToStr((Lite<IIdentifiable>)value);
+                        if (value is Lite<IEntity>)
+                            Server.FillToStr((Lite<IEntity>)value);
                     }
 
                     return new FilterOption
@@ -113,7 +113,7 @@ namespace Signum.Windows.Omnibox
 
         public override Run GetIcon()
         {
-            return new Run("({0})".Formato(typeof(QueryDN).NiceName())) { Foreground = Brushes.Orange };
+            return new Run("({0})".FormatWith(typeof(QueryEntity).NiceName())) { Foreground = Brushes.Orange };
         }
 
         public override string GetName(DynamicQueryOmniboxResult result)

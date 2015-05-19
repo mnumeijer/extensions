@@ -89,7 +89,7 @@ namespace Signum.Web.Omnibox
             {
                 return new HtmlTag("span")
                     .InnerHtml(new MvcHtmlString(text))
-                    .Attr("style", "color:{0}; padding: .2em .4em; line-height: 1.6em;".Formato(colorName)).ToHtml();
+                    .Attr("style", "color:{0}; padding: .2em .4em; line-height: 1.6em;".FormatWith(colorName)).ToHtml();
             }
 
             public MvcHtmlString ColoredGlyphicon(string icon, string colorName)
@@ -97,7 +97,7 @@ namespace Signum.Web.Omnibox
                 return new HtmlTag("span")
                     .Class("glyphicon")
                     .Class(icon)
-                    .Attr("style", "color:{0}".Formato(colorName))
+                    .Attr("style", "color:{0}".FormatWith(colorName))
                     .ToHtml();
             }
         }
@@ -136,7 +136,7 @@ namespace Signum.Web.Omnibox
                 return Finder.IsFindable(queryName);
             }
 
-            public override Lite<IdentifiableEntity> RetrieveLite(Type type, int id)
+            public override Lite<Entity> RetrieveLite(Type type, PrimaryKey id)
             {
                 if (!Database.Exists(type, id))
                     return null;
@@ -148,10 +148,10 @@ namespace Signum.Web.Omnibox
                 return DynamicQueryManager.Current.QueryDescription(queryName);
             }
 
-            public override List<Lite<IdentifiableEntity>> Autocomplete(Implementations implementations, string subString, int count)
+            public override List<Lite<Entity>> Autocomplete(Implementations implementations, string subString, int count)
             {
                 if (string.IsNullOrEmpty(subString))
-                    return new List<Lite<IdentifiableEntity>>();
+                    return new List<Lite<Entity>>();
 
                 return AutocompleteUtils.FindLiteLike(implementations, subString, 5);
             }

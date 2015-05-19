@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
@@ -13,7 +13,6 @@ using Signum.Entities;
 using Signum.Web.Controllers;
 using Signum.Engine.Dashboard;
 using Signum.Engine.Authorization;
-using Signum.Web.Extensions.UserQueries;
 using Signum.Web.UserAssets;
 using System.Web.Mvc.Html;
 
@@ -37,19 +36,19 @@ namespace Signum.Web.Dashboard
 
             public string FrontEndView;
             public string AdminView;
-            public Func<IPartDN, string> TitleLink;
+            public Func<IPartEntity, string> TitleLink;
             public bool HasFullScreenLink;
         }
 
         public static Dictionary<Type, PartViews> PanelPartViews = new Dictionary<Type, PartViews>()
         {
-            { typeof(UserChartPartDN), new PartViews(ViewPrefix.Formato("UserChartPart"), AdminViewPrefix.Formato("UserChartPart")) { HasFullScreenLink = true, TitleLink = p=> NavigateRoute(((UserChartPartDN)p).UserChart) }},
-            { typeof(UserQueryPartDN), new PartViews(ViewPrefix.Formato("SearchControlPart"), AdminViewPrefix.Formato("SearchControlPart")) { HasFullScreenLink = true, TitleLink = p=> NavigateRoute(((UserQueryPartDN)p).UserQuery) }},
-            { typeof(CountSearchControlPartDN), new PartViews(ViewPrefix.Formato("CountSearchControlPart"), AdminViewPrefix.Formato("CountSearchControlPart")) },
-            { typeof(LinkListPartDN), new PartViews(ViewPrefix.Formato("LinkListPart"), AdminViewPrefix.Formato("LinkListPart")) },
+            { typeof(UserChartPartEntity), new PartViews(ViewPrefix.FormatWith("UserChartPart"), AdminViewPrefix.FormatWith("UserChartPart")) { HasFullScreenLink = true, TitleLink = p=> NavigateRoute(((UserChartPartEntity)p).UserChart) }},
+            { typeof(UserQueryPartEntity), new PartViews(ViewPrefix.FormatWith("SearchControlPart"), AdminViewPrefix.FormatWith("SearchControlPart")) { HasFullScreenLink = true, TitleLink = p=> NavigateRoute(((UserQueryPartEntity)p).UserQuery) }},
+            { typeof(CountSearchControlPartEntity), new PartViews(ViewPrefix.FormatWith("CountSearchControlPart"), AdminViewPrefix.FormatWith("CountSearchControlPart")) },
+            { typeof(LinkListPartEntity), new PartViews(ViewPrefix.FormatWith("LinkListPart"), AdminViewPrefix.FormatWith("LinkListPart")) },
         };
 
-        static string NavigateRoute(IdentifiableEntity entity)
+        static string NavigateRoute(Entity entity)
         {
             if (!Navigator.IsNavigable(entity, null))
                 return null;
@@ -64,33 +63,33 @@ namespace Signum.Web.Dashboard
                 Navigator.RegisterArea(typeof(DashboardClient));
 
                 UserAssetsClient.Start();
-                UserAssetsClient.RegisterExportAssertLink<DashboardDN>();
+                UserAssetsClient.RegisterExportAssertLink<DashboardEntity>();
 
                 Navigator.AddSettings(new List<EntitySettings>
                 {
-                    new EntitySettings<DashboardDN> { PartialViewName = e => AdminViewPrefix.Formato("DashboardAdmin") },
-                    new EmbeddedEntitySettings<PanelPartDN>(),
+                    new EntitySettings<DashboardEntity> { PartialViewName = e => AdminViewPrefix.FormatWith("DashboardAdmin") },
+                    new EmbeddedEntitySettings<PanelPartEntity>(),
                     
-                    new EntitySettings<UserChartPartDN>(),
+                    new EntitySettings<UserChartPartEntity>(),
 
-                    new EntitySettings<UserQueryPartDN>(),
+                    new EntitySettings<UserQueryPartEntity>(),
 
-                    new EntitySettings<CountSearchControlPartDN>(),
-                    new EmbeddedEntitySettings<CountUserQueryElementDN> { PartialViewName = e => AdminViewPrefix.Formato("CountUserQueryElement") },
+                    new EntitySettings<CountSearchControlPartEntity>(),
+                    new EmbeddedEntitySettings<CountUserQueryElementEntity> { PartialViewName = e => AdminViewPrefix.FormatWith("CountUserQueryElement") },
                     
-                    new EntitySettings<LinkListPartDN>(),
-                    new EmbeddedEntitySettings<LinkElementDN> { PartialViewName = e => AdminViewPrefix.Formato("LinkElement") },
+                    new EntitySettings<LinkListPartEntity>(),
+                    new EmbeddedEntitySettings<LinkElementEntity> { PartialViewName = e => AdminViewPrefix.FormatWith("LinkElement") },
                 });
 
-                Constructor.Register(ctx => new DashboardDN { Owner = UserDN.Current.ToLite() });
+                Constructor.Register(ctx => new DashboardEntity { Owner = UserEntity.Current.ToLite() });
 
-                LinksClient.RegisterEntityLinks<DashboardDN>((cp, ctx) => new[]
+                LinksClient.RegisterEntityLinks<DashboardEntity>((cp, ctx) => new[]
                 {
                     !DashboardPermission.ViewDashboard.IsAuthorized() ? null:
                      new QuickLinkAction(DashboardMessage.Preview, RouteHelper.New().Action<DashboardController>(cpc => cpc.View(cp, null)))
                 });
 
-                LinksClient.RegisterEntityLinks<IdentifiableEntity>((entity, ctrl) =>
+                LinksClient.RegisterEntityLinks<Entity>((entity, ctrl) =>
                 {
                     if (!DashboardPermission.ViewDashboard.IsAuthorized())
                         return null;
@@ -101,27 +100,27 @@ namespace Signum.Web.Dashboard
 
                 WidgetsHelper.GetEmbeddedWidget += ctx =>
                 {
-                    if (!DashboardPermission.ViewDashboard.IsAuthorized() || !(ctx.Entity is IdentifiableEntity))
+                    if (!DashboardPermission.ViewDashboard.IsAuthorized() || !(ctx.Entity is Entity) || ((Entity)ctx.Entity).IsNew)
                         return null;
 
                     var dashboard = DashboardLogic.GetEmbeddedDashboard(ctx.Entity.GetType());
                     if (dashboard == null)
                         return null;
 
-                    return new DashboardEmbeddedWidget { Dashboard = dashboard, Entity = (IdentifiableEntity)ctx.Entity };
+                    return new DashboardEmbeddedWidget { Dashboard = dashboard, Entity = (Entity)ctx.Entity };
                 };
             }
         }
 
         class DashboardEmbeddedWidget : IEmbeddedWidget
         {
-            public DashboardDN Dashboard { get; set; }
+            public DashboardEntity Dashboard { get; set; }
 
-            public IdentifiableEntity Entity { get; set; }
+            public Entity Entity { get; set; }
 
             public MvcHtmlString ToHtml(HtmlHelper helper)
             {
-                return helper.Partial(DashboardClient.ViewPrefix.Formato("DashboardView"), Dashboard,
+                return helper.Partial(DashboardClient.ViewPrefix.FormatWith("DashboardView"), Dashboard,
                     new ViewDataDictionary { { "currentEntity", Entity } });
             }
 
@@ -131,17 +130,17 @@ namespace Signum.Web.Dashboard
                 {
                     return Dashboard.EmbeddedInEntity.Value == DashboardEmbedededInEntity.Top ? EmbeddedWidgetPostion.Top :
                         Dashboard.EmbeddedInEntity.Value == DashboardEmbedededInEntity.Bottom ? EmbeddedWidgetPostion.Bottom :
-                        new InvalidOperationException("Unexpected {0}".Formato(Dashboard.EmbeddedInEntity.Value)).Throw<EmbeddedWidgetPostion>();
+                        new InvalidOperationException("Unexpected {0}".FormatWith(Dashboard.EmbeddedInEntity.Value)).Throw<EmbeddedWidgetPostion>();
                 }
             }
         }
 
         class DashboardQuickLink : QuickLink
         {
-            Lite<DashboardDN> dashboard;
-            Lite<IdentifiableEntity> entity;
+            Lite<DashboardEntity> dashboard;
+            Lite<Entity> entity;
 
-            public DashboardQuickLink(Lite<DashboardDN> dashboard, Lite<IdentifiableEntity> entity)
+            public DashboardQuickLink(Lite<DashboardEntity> dashboard, Lite<Entity> entity)
             {
                 this.Text = dashboard.ToString();
                 this.dashboard = dashboard;

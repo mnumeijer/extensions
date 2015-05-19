@@ -24,162 +24,494 @@ using Signum.Entities.DynamicQuery;
 using Signum.Engine.Basics;
 using Signum.Entities.Basics;
 using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
+using Signum.Entities.Help;
+using Signum.Entities.Translation;
+using Signum.Services;
+using Signum.Engine.WikiMarkup;
+using Signum.Engine.Authorization;
 
 
 namespace Signum.Engine.Help
 {
     public static class HelpLogic
     {
-        public static string EntitiesDirectory = "Entity";
-        public static string QueriesDirectory = "Query";
-        public static string NamespacesDirectory = "Namespace";
-        public static string AppendicesDirectory = "Appendix";
-        public static string HelpDirectory = "HelpXml";
-        public static string BaseUrl = "Help";
+        public static ResetLazy<ConcurrentDictionary<CultureInfo, Dictionary<Type, EntityHelp>>> Types;
+        public static ResetLazy<ConcurrentDictionary<CultureInfo, Dictionary<string, NamespaceHelp>>> Namespaces;
+        public static ResetLazy<ConcurrentDictionary<CultureInfo, Dictionary<string, AppendixHelp>>> Appendices;
+        public static ResetLazy<ConcurrentDictionary<CultureInfo, Dictionary<object, QueryHelp>>> Queries;
+        public static ResetLazy<ConcurrentDictionary<CultureInfo, Dictionary<OperationSymbol, OperationHelp>>> Operations;
 
-        public class HelpState
+        public static Lazy<Dictionary<Type, List<object>>> TypeToQuery = new Lazy<Dictionary<Type, List<object>>>(() =>
         {
-            public Dictionary<Type, EntityHelp> Types;
+            var dqm = DynamicQueryManager.Current;
 
-            public Dictionary<string, NamespaceHelp> Namespaces;
-            public Dictionary<string, AppendixHelp> Appendices;
+            return (from qn in dqm.GetQueryNames()
+                    let imp = dqm.GetEntityImplementations(qn)
+                    where !imp.IsByAll
+                    from t in imp.Types
+                    group qn by t into g
+                    select KVP.Create(g.Key, g.ToList())).ToDictionary();
 
-            public Dictionary<Type, List<object>> TypeToQuery;
-            public Dictionary<object, QueryHelp> Queries;
+        });
 
-            public List<QueryHelp> GetQueryHelps(Type type)
+        public static Dictionary<string, NamespaceHelp> CachedNamespacesHelp()
+        {
+            return Namespaces.Value.GetOrAdd(GetCulture(), ci => GlobalContext(() =>
             {
-                var list = TypeToQuery.TryGetC(type);
+                var namespaces = AllTypes().GroupBy(type => type.Namespace);
 
-                if(list == null)
-                    return new List<QueryHelp>();
+                var dic = Database.Query<NamespaceHelpEntity>().Where(n => n.Culture == ci.ToCultureInfoEntity()).ToDictionary(a => a.Name);
 
-                return list.Select(o => Queries[o]).ToList();
+                return namespaces.ToDictionary(gr => gr.Key, gr => new NamespaceHelp(gr.Key, ci, dic.TryGetC(gr.Key), gr.ToArray()));
+            }));
+        }
+
+        public static NamespaceHelp GetNamespaceHelp(string @namespace)
+        {
+            return CachedNamespacesHelp().GetOrThrow(@namespace).Do(a => a.AssertAllowed());
+        }
+
+        public static IEnumerable<NamespaceHelp> GetNamespaceHelps()
+        {
+            return CachedNamespacesHelp().Values.Where(a => a.IsAllowed() == null);
+        }
+
+
+
+        public static Dictionary<string, AppendixHelp> CachedAppendicesHelp()
+        {
+            return Appendices.Value.GetOrAdd(GetCulture(), ci => GlobalContext(() =>
+                Database.Query<AppendixHelpEntity>().Where(n => n.Culture == ci.ToCultureInfoEntity()).ToDictionary(a => a.UniqueName, a => new AppendixHelp(ci, a))));
+        }
+
+        public static AppendixHelp GetAppendixHelp(string name)
+        {
+            return CachedAppendicesHelp().GetOrThrow(name);
+        }
+
+        public static IEnumerable<AppendixHelp> GetAppendixHelps()
+        {
+            return CachedAppendicesHelp().Values.Where(a => a.IsAllowed() == null);
+        }
+
+
+
+        public static Dictionary<Type, EntityHelp> CachedEntityHelp()
+        {
+            return Types.Value.GetOrAdd(GetCulture(), ci => GlobalContext(() =>
+            {
+                using (ExecutionMode.Global())
+                {
+                    var dic = Database.Query<EntityHelpEntity>().Where(n => n.Culture == ci.ToCultureInfoEntity()).ToDictionary(a => a.Type.ToType());
+
+                    return AllTypes().ToDictionary(t => t, t => new EntityHelp(t, ci, dic.TryGetC(t)));
+                }
+            }));
+        }
+
+        public static EntityHelp GetEntityHelp(Type type)
+        {
+            return CachedEntityHelp().GetOrThrow(type).Do(a => a.AssertAllowed());
+        }
+
+        public static IEnumerable<EntityHelp> GetEntityHelps()
+        {
+            return CachedEntityHelp().Values.Where(a => a.IsAllowed() == null);
+        }
+
+
+
+        public static Dictionary<object, QueryHelp> CachedQueriesHelp()
+        {
+            return Queries.Value.GetOrAdd(GetCulture(), ci => GlobalContext(() =>
+            {
+                var dic = Database.Query<QueryHelpEntity>().Where(n => n.Culture == ci.ToCultureInfoEntity()).ToDictionary(a => a.Query.ToQueryName());
+
+                return AllQueries().ToDictionary(t => t, t => new QueryHelp(t, ci, dic.TryGetC(t)));
+            }));
+        }
+
+        public static QueryHelp GetQueryHelp(object queryName)
+        {
+            return CachedQueriesHelp().GetOrThrow(queryName).Do(a => a.AssertAllowed());
+        }
+
+
+        public static Dictionary<OperationSymbol, OperationHelp> CachedOperationsHelp()
+        {
+            return Operations.Value.GetOrAdd(GetCulture(), ci =>
+            {
+                var dic = Database.Query<OperationHelpEntity>().Where(n => n.Culture == ci.ToCultureInfoEntity()).ToDictionary(a => a.Operation);
+
+                return OperationLogic.AllSymbols().ToDictionary(o => o, o => new OperationHelp(o, ci, dic.TryGetC(o)));
+            }).Where(a => OperationLogic.OperationAllowed(a.Key, inUserInterface: true)).ToDictionary();
+        }
+
+        public static T GlobalContext<T>(Func<T> customFunc)
+        {
+            using (var tr = Transaction.ForceNew())
+            using (ExecutionMode.Global())
+            using (new EntityCache(EntityCacheType.ForceNew))
+            {
+                return tr.Commit(customFunc());
             }
         }
 
-        public static Lazy<HelpState> State = new Lazy<HelpState>(Schema_Initialize, System.Threading.LazyThreadSafetyMode.PublicationOnly);
-
-      
-        public static NamespaceHelp GetNamespace(string @namespace)
+        public static CultureInfo GetCulture()
         {
-            return State.Value.Namespaces.TryGetC(@namespace);
+            var dic = CultureInfoLogic.CultureInfoToEntity.Value;
+
+            var ci = CultureInfo.CurrentCulture;
+
+            if (dic.ContainsKey(ci.Name))
+                return ci;
+
+            if (dic.ContainsKey(ci.Parent.Name))
+                return ci.Parent;
+
+            if (Schema.Current.ForceCultureInfo != null && dic.ContainsKey(Schema.Current.ForceCultureInfo.Name))
+                return Schema.Current.ForceCultureInfo;
+
+            throw new InvalidOperationException("No compatible CultureInfo found in the database for {0}".FormatWith(ci.Name));
         }
 
-        public static List<NamespaceHelp> GetNamespaces()
+
+
+        public static List<Type> AllTypes()
         {
-            return State.Value.Namespaces.Select(kvp => kvp.Value).ToList();
+            return Schema.Current.Tables.Keys.Where(t => !t.IsEnumEntity()).ToList();
         }
 
-        public static List<AppendixHelp> GetAppendices()
+        public static List<object> AllQueries()
         {
-            return State.Value.Appendices.Select(kvp => kvp.Value).ToList();
+            return (from type in AllTypes()
+                    from key in DynamicQueryManager.Current.GetTypeQueries(type).Keys
+                    select key).Distinct().ToList();
         }
 
-        public static AppendixHelp GetAppendix(string appendix)
-        {
-            return State.Value.Appendices.TryGetC(appendix);
-        }
-
-        public static Type[] AllTypes()
-        {
-            return State.Value.Types.Keys.ToArray();
-        }
-
-        public static string EntityUrl(Type entityType)
-        {
-            return BaseUrl + "/" + TypeLogic.GetCleanName(entityType);
-        }
-
-        public static string OperationUrl(Type entityType, OperationSymbol operation)
-        {
-            return HelpLogic.EntityUrl(entityType) + "#" + "o-" + operation.Key.Replace('.', '_');
-        }
-
-        public static string PropertyUrl(PropertyRoute route)
-        {
-            return HelpLogic.EntityUrl(route.RootType) + "#" + "p-" + route.PropertyString();
-        }
-
-        public static string QueryUrl(Type entityType)
-        {
-            return HelpLogic.EntityUrl(entityType) + "#" + "q-" + entityType.FullName.Replace(".", "_");
-        }
-        
-        public static string QueryUrl(Enum query)
-        {
-            return HelpLogic.EntityUrl(GetQueryType(query))
-                + "#" + "q-" + QueryUtils.GetQueryUniqueKey(query).ToString().Replace(".", "_");
-        }
-
-        public static EntityHelp GetEntityHelp(Type entityType)
-        {
-            return State.Value.Types[entityType];
-        }
-
-        public static List<KeyValuePair<Type, EntityHelp>> GetEntitiesHelp()
-        {
-            return State.Value.Types.ToList();
-        }
-
-        public static QueryHelp GetQueryHelp(string query)
-        {
-            return State.Value.Queries[QueryLogic.TryToQueryName(query)];
-        }
-
-        public static void Start(SchemaBuilder sb)
+        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
+                sb.Include<EntityHelpEntity>();
+                sb.Include<NamespaceHelpEntity>();
+                sb.Include<AppendixHelpEntity>();
+                sb.Include<QueryHelpEntity>();
+                sb.Include<OperationHelpEntity>();
+
+                sb.AddUniqueIndex((EntityHelpEntity e) => new { e.Type, e.Culture });
+                sb.AddUniqueIndexMList((EntityHelpEntity e) => e.Properties, mle => new { mle.Parent, mle.Element.Property });
+                sb.AddUniqueIndex((NamespaceHelpEntity e) => new { e.Name, e.Culture });
+                sb.AddUniqueIndex((AppendixHelpEntity e) => new { Name = e.UniqueName, e.Culture });
+                sb.AddUniqueIndex((QueryHelpEntity e) => new { e.Query, e.Culture });
+                sb.AddUniqueIndexMList((QueryHelpEntity e) => e.Columns, mle => new { mle.Parent, mle.Element.ColumnName });
+                sb.AddUniqueIndex((OperationHelpEntity e) => new { e.Operation, e.Culture });
+
+                Types = sb.GlobalLazy<ConcurrentDictionary<CultureInfo, Dictionary<Type, EntityHelp>>>(() => new ConcurrentDictionary<CultureInfo, Dictionary<Type, EntityHelp>>(),
+                    invalidateWith: new InvalidateWith(typeof(EntityHelpEntity)));
+
+                Namespaces = sb.GlobalLazy<ConcurrentDictionary<CultureInfo, Dictionary<string, NamespaceHelp>>>(() => new ConcurrentDictionary<CultureInfo, Dictionary<string, NamespaceHelp>>(),
+                    invalidateWith: new InvalidateWith(typeof(NamespaceHelpEntity)));
+
+                Appendices = sb.GlobalLazy<ConcurrentDictionary<CultureInfo, Dictionary<string, AppendixHelp>>>(() => new ConcurrentDictionary<CultureInfo, Dictionary<string, AppendixHelp>>(),
+                    invalidateWith: new InvalidateWith(typeof(AppendixHelpEntity)));
+
+                Queries = sb.GlobalLazy<ConcurrentDictionary<CultureInfo, Dictionary<object, QueryHelp>>>(() => new ConcurrentDictionary<CultureInfo, Dictionary<object, QueryHelp>>(),
+                   invalidateWith: new InvalidateWith(typeof(QueryHelpEntity)));
+
+                Operations = sb.GlobalLazy<ConcurrentDictionary<CultureInfo, Dictionary<OperationSymbol, OperationHelp>>>(() => new ConcurrentDictionary<CultureInfo, Dictionary<OperationSymbol, OperationHelp>>(),
+                    invalidateWith: new InvalidateWith(typeof(OperationHelpEntity)));
+
+                dqm.RegisterQuery(typeof(EntityHelpEntity), () =>
+                    from e in Database.Query<EntityHelpEntity>()
+                    select new
+                    {
+                        Entity = e,
+                        e.Id,
+                        e.Type,
+                        Description = e.Description.Etc(100)
+                    });
+
+                dqm.RegisterQuery(typeof(NamespaceHelpEntity), () =>
+                    from n in Database.Query<NamespaceHelpEntity>()
+                    select new
+                    {
+                        Entity = n,
+                        n.Id,
+                        n.Name,
+                        n.Culture,
+                        Description = n.Description.Etc(100)
+                    });
+
+                dqm.RegisterQuery(typeof(AppendixHelpEntity), () =>
+                    from a in Database.Query<AppendixHelpEntity>()
+                    select new
+                    {
+                        Entity = a,
+                        a.Id,
+                        a.UniqueName,
+                        a.Culture,
+                        a.Title,
+                        Description = a.Description.Etc(100)
+                    });
+
+                dqm.RegisterQuery(typeof(QueryHelpEntity), () =>
+                     from q in Database.Query<QueryHelpEntity>()
+                     select new
+                     {
+                         Entity = q,
+                         q.Id,
+                         q.Query,
+                         q.Culture,
+                         Description = q.Description.Etc(100)
+                     });
+
+
+                dqm.RegisterQuery(typeof(OperationHelpEntity), () =>
+                     from o in Database.Query<OperationHelpEntity>()
+                     select new
+                     {
+                         Entity = o,
+                         o.Id,
+                         o.Operation,
+                         o.Culture,
+                         Description = o.Description.Etc(100)
+                     });
+
+                new Graph<AppendixHelpEntity>.Execute(AppendixHelpOperation.Save)
+                {
+                    AllowsNew = true,
+                    Lite = false,
+                    Execute = (e, _) => { },
+                }.Register();
+
+                new Graph<NamespaceHelpEntity>.Execute(NamespaceHelpOperation.Save)
+                {
+                    AllowsNew = true,
+                    Lite = false,
+                    Execute = (e, _) => { },
+                }.Register();
+
+                new Graph<EntityHelpEntity>.Execute(EntityHelpOperation.Save)
+                {
+                    AllowsNew = true,
+                    Lite = false,
+                    Execute = (e, _) => { },
+                }.Register();
+
+                new Graph<QueryHelpEntity>.Execute(QueryHelpOperation.Save)
+                {
+                    AllowsNew = true,
+                    Lite = false,
+                    Execute = (e, _) => { },
+                }.Register();
+                OperationLogic.SetProtectedSave<QueryHelpEntity>(false);
+
+                new Graph<OperationHelpEntity>.Execute(OperationHelpOperation.Save)
+                {
+                    AllowsNew = true,
+                    Lite = false,
+                    Execute = (e, _) => { },
+                }.Register();
+                OperationLogic.SetProtectedSave<OperationHelpEntity>(false);
+
+                sb.Schema.Synchronizing += Schema_Synchronizing;
+
+                sb.Schema.Table<OperationSymbol>().PreDeleteSqlSync += operation =>
+                    Administrator.UnsafeDeletePreCommand(Database.Query<OperationHelpEntity>().Where(e => e.Operation == (OperationSymbol)operation));
+
+                sb.Schema.Table<TypeEntity>().PreDeleteSqlSync += type =>
+                    Administrator.UnsafeDeletePreCommand(Database.Query<EntityHelpEntity>().Where(e => e.Type == (TypeEntity)type));
+
+                sb.Schema.Table<QueryEntity>().PreDeleteSqlSync += query =>
+                    Administrator.UnsafeDeletePreCommand(Database.Query<QueryHelpEntity>().Where(e => e.Query == (QueryEntity)query));
+
+                PermissionAuthLogic.RegisterPermissions(HelpPermissions.ViewHelp);
             }
         }
 
-        public static void ReloadDocumentEntity(EntityHelp entityHelp)
+        static SqlPreCommand Schema_Synchronizing(Replacements replacements)
         {
-            State.Value.Types[entityHelp.Type] = EntityHelp.Create(entityHelp.Type).Load();
+            bool any =
+                Database.Query<EntityHelpEntity>().Any() ||
+                Database.Query<OperationHelpEntity>().Any() ||
+                Database.Query<QueryHelpEntity>().Any() ||
+                Database.Query<NamespaceHelpEntity>().Any() ||
+                Database.Query<AppendixHelpEntity>().Any();
+
+            if (!(any && replacements.Interactive && SafeConsole.Ask("Synchronize Help content?")))
+                return null;
+
+            SyncData data = new SyncData
+            {
+                Namespaces = AllTypes().Select(a => a.Namespace).ToHashSet(),
+                Appendices = Database.Query<AppendixHelpEntity>().Select(a => a.UniqueName).ToHashSet(),
+                StringDistance = new StringDistance()
+            };
+
+            var ns = SynchronizeNamespace(replacements, data);
+            var appendix = SynchronizeAppendix(replacements, data);
+            var types = SynchronizeTypes(replacements, data);
+            var queries = SynchronizeQueries(replacements, data);
+            var operations = SynchronizeOperations(replacements, data);
+
+            return SqlPreCommand.Combine(Spacing.Double, ns, appendix, types, queries);
         }
 
-        public static void ReloadDocumentQuery(QueryHelp queryHelp)
+        public class SyncData
         {
-            State.Value.Queries[queryHelp.Key] = QueryHelp.Create(queryHelp.Key).Load();
+            public HashSet<string> Namespaces;
+            public HashSet<string> Appendices;
+            public StringDistance StringDistance;
         }
 
-        public static void ReloadDocumentNamespace(NamespaceHelp namespaceHelp)
+        static SqlPreCommand SynchronizeQueries(Replacements replacements, SyncData data)
         {
-            State.Value.Namespaces[namespaceHelp.Name] = NamespaceHelp.Create(namespaceHelp.Name).Load();
+            var dic = Database.Query<QueryHelpEntity>().ToList();
+
+            if (dic.IsEmpty())
+                return null;
+
+            var queriesByKey = DynamicQueryManager.Current.GetQueryNames().ToDictionary(a => QueryUtils.GetQueryUniqueKey(a));
+
+            var table = Schema.Current.Table<QueryHelpEntity>();
+
+            var replace = replacements.TryGetC(QueryLogic.QueriesKey);
+
+            return dic.Select(qh =>
+            {
+                object queryName = queriesByKey.TryGetC(replace.TryGetC(qh.Query.Key) ?? qh.Query.Key);
+
+                if (queryName == null)
+                    return null; //PreDeleteSqlSync
+
+                if (qh.Columns.Any())
+                {
+                    var columns = DynamicQueryManager.Current.GetQuery(queryName).Core.Value.StaticColumns;
+
+                    Synchronizer.SynchronizeReplacing(replacements, "ColumnsOfQuery:" + QueryUtils.GetQueryUniqueKey(queryName),
+                        columns.ToDictionary(a => a.Name),
+                        qh.Columns.ToDictionary(a => a.ColumnName),
+                        null,
+                        (qn, oldQ) => qh.Columns.Remove(oldQ),
+                        (qn, newQ, oldQ) =>
+                        {
+                            oldQ.ColumnName = newQ.Name;
+                        });
+
+                    foreach (var col in qh.Columns)
+                        col.Description = SynchronizeContent(col.Description, replacements, data);
+                }
+
+                qh.Description = SynchronizeContent(qh.Description, replacements, data);
+
+                return table.UpdateSqlSync(qh);
+            }).Combine(Spacing.Simple);
         }
 
-        public static void ReloadDocumentAppendix(AppendixHelp appendixHelp)
+        static SqlPreCommand SynchronizeOperations(Replacements replacements, SyncData data)
         {
-            State.Value.Appendices[appendixHelp.Name] = AppendixHelp.Load(XDocument.Load(appendixHelp.FileName), appendixHelp.FileName);
+            var dic = Database.Query<OperationHelpEntity>().ToList();
+
+            if (dic.IsEmpty())
+                return null;
+
+            var queriesByKey = DynamicQueryManager.Current.GetQueryNames().ToDictionary(a => QueryUtils.GetQueryUniqueKey(a));
+
+            var table = Schema.Current.Table<OperationHelpEntity>();
+
+            var replace = replacements.TryGetC(QueryLogic.QueriesKey);
+
+            using (replacements.WithReplacedDatabaseName())
+                return dic.Select(qh =>
+                {
+                    qh.Description = SynchronizeContent(qh.Description, replacements, data);
+
+                    return table.UpdateSqlSync(qh);
+                }).Combine(Spacing.Simple);
         }
 
-        static HelpState Schema_Initialize()
+        static SqlPreCommand SynchronizeTypes(Replacements replacements, SyncData data)
         {
-            if (!Directory.Exists(HelpDirectory))
-                throw new InvalidOperationException("Help directory does not exist ('{0}')".Formato(HelpDirectory));
+            var dic = Database.Query<EntityHelpEntity>().ToList();
 
-            HelpState result = new HelpState();
+            if (dic.IsEmpty())
+                return null;
 
-            Type[] types = Schema.Current.Tables.Keys.Where(t => !t.IsEnumEntity()).ToArray();
+            var typesByTableName = Schema.Current.Tables.ToDictionary(kvp => kvp.Value.Name.Name, kvp => kvp.Key);
 
-            result.Types = types.Select(t => EntityHelp.Create(t).Load()).ToDictionary(a => a.Type);
+            var replace = replacements.TryGetC(Replacements.KeyTables);
 
-            var dqm = DynamicQueryManager.Current;
-            result.TypeToQuery = types.ToDictionary(t => t, t => dqm.GetTypeQueries(t).Keys.ToList());
-            result.Queries = result.TypeToQuery.SelectMany(kvp => kvp.Value).Distinct().Select(qn => QueryHelp.Create(qn).Load()).ToDictionary(a => a.Key);
+            var table = Schema.Current.Table<EntityHelpEntity>();
 
-            result.Namespaces = types.Select(t => t.Namespace).Distinct().Select(ns => NamespaceHelp.Create(ns).Load()).ToDictionary(a => a.Name);
+            using (replacements.WithReplacedDatabaseName())
+                return dic.Select(eh =>
+                {
+                    Type type = typesByTableName.TryGetC(replace.TryGetC(eh.Type.TableName) ?? eh.Type.TableName);
 
-            result.Appendices = FileNames(AppendicesDirectory).Select(fn => AppendixHelp.Load(LoadAndValidate(fn), fn)).ToDictionary(a => a.Name);
-         
-            return result;
+                    if (type == null)
+                        return null; //PreDeleteSqlSync
+
+                    var repProperties = replacements.TryGetC(PropertyRouteLogic.PropertiesFor.FormatWith(type.FullName));
+                    var routes = PropertyRoute.GenerateRoutes(type).ToDictionary(pr => { var ps = pr.PropertyString(); return repProperties.TryGetC(ps) ?? ps; });
+                    eh.Properties.RemoveAll(p => !routes.ContainsKey(p.Property.Path));
+                    foreach (var prop in eh.Properties)
+                        prop.Description = SynchronizeContent(prop.Description, replacements, data);
+
+                    eh.Description = SynchronizeContent(eh.Description, replacements, data);
+
+                    return table.UpdateSqlSync(eh);
+                }).Combine(Spacing.Simple);
         }
 
-        public static Type GetQueryType(object query)
+        static SqlPreCommand SynchronizeNamespace(Replacements replacements, SyncData data)
         {
-            return DynamicQueryManager.Current.GetQuery(query).Core.Value.EntityColumnFactory().Implementations.Value.Types.FirstEx();
+            var entities = Database.Query<NamespaceHelpEntity>().ToList();
+
+            if (entities.IsEmpty())
+                return null;
+
+            var current = entities.Select(a => a.Name).ToHashSet();
+
+            replacements.AskForReplacements(current, data.Namespaces, "namespaces");
+
+            var table = Schema.Current.Table<NamespaceHelpEntity>();
+
+            using (replacements.WithReplacedDatabaseName())
+                return entities.Select(e =>
+                {
+                    e.Name = replacements.TryGetC("namespaces").TryGetC(e.Name) ?? e.Name;
+
+                    if (!data.Namespaces.Contains(e.Name))
+                        return table.DeleteSqlSync(e);
+
+                    e.Description = SynchronizeContent(e.Description, replacements, data);
+
+                    return table.UpdateSqlSync(e);
+                }).Combine(Spacing.Simple);
         }
+
+        static SqlPreCommand SynchronizeAppendix(Replacements replacements, SyncData data)
+        {
+            var entities = Database.Query<AppendixHelpEntity>().ToList();
+
+            if (entities.IsEmpty())
+                return null;
+
+            var table = Schema.Current.Table<AppendixHelpEntity>();
+
+            using (replacements.WithReplacedDatabaseName())
+                return entities.Select(e =>
+                {
+                    e.Description = SynchronizeContent(e.Description, replacements, data);
+
+                    return table.UpdateSqlSync(e);
+                }).Combine(Spacing.Simple);
+        }
+
+
+
 
         static Lazy<XmlSchemaSet> Schemas = new Lazy<XmlSchemaSet>(() =>
         {
@@ -189,114 +521,24 @@ namespace Signum.Engine.Help
             return schemas;
         });
 
-        static List<string> FileNames(string subdirectory)
-        {
-            return Directory.GetFiles(Path.Combine(HelpDirectory, subdirectory), "*.help").ToList();
-        }
-
         internal static XDocument LoadAndValidate(string fileName)
         {
-            var document = XDocument.Load(fileName); 
+            var document = XDocument.Load(fileName);
 
             List<Tuple<XmlSchemaException, string>> exceptions = new List<Tuple<XmlSchemaException, string>>();
 
             document.Document.Validate(Schemas.Value, (s, e) => exceptions.Add(Tuple.Create(e.Exception, fileName)));
 
             if (exceptions.Any())
-                throw new InvalidOperationException("Error Parsing XML Help Files: " + exceptions.ToString(e => "{0} ({1}:{2}): {3}".Formato(
+                throw new InvalidOperationException("Error Parsing XML Help Files: " + exceptions.ToString(e => "{0} ({1}:{2}): {3}".FormatWith(
                  e.Item2, e.Item1.LineNumber, e.Item1.LinePosition, e.Item1.Message), "\r\n").Indent(3));
 
             return document;
         }
 
-        public static void SyncronizeAll()
-        {
-            if (!Directory.Exists(HelpDirectory))
-            {
-                Directory.CreateDirectory(HelpDirectory);
-            }
-
-            Type[] types = Schema.Current.Tables.Keys.Where(t => !t.IsEnumEntity()).ToArray();
-
-            Replacements r = new Replacements();
-
-            StringDistance sd = new StringDistance();
-
-            var namespaces = types.Select(type => type.Namespace).ToHashSet();
-
-            //Namespaces
-            {
-                var namespacesDocuments = FileNames(NamespacesDirectory)
-                    .Select(fn => new { FileName = fn, XDocument = LoadAndValidate(fn) })
-                    .ToDictionary(p => NamespaceHelp.GetNamespaceName(p.XDocument, p.FileName), "Namespaces in HelpFiles");
-
-
-                HelpTools.SynchronizeReplacing(r, "Namespace", namespacesDocuments, namespaces.ToDictionary(a => a),
-                 (nameSpace, pair) =>
-                 {
-                     File.Delete(pair.FileName);
-                     Console.WriteLine("Deleted {0}".Formato(pair.FileName));
-                 },
-                 (nameSpace, _) =>
-                 {
-                 },
-                 (nameSpace, pair, _) =>
-                 {
-                     NamespaceHelp.Synchronize(pair.FileName, pair.XDocument, nameSpace, s => SyncronizeContent(s, r, sd, namespaces));
-                 });
-            }
-
-            //Types
-            {
-                var should = types.ToDictionary(type => type.FullName);
-
-                var current = FileNames(EntitiesDirectory)
-                    .Select(fn => new { FileName = fn, XDocument = LoadAndValidate(fn) })
-                    .ToDictionary(a => EntityHelp.GetEntityFullName(a.XDocument, a.FileName), "Types in HelpFiles");
-
-
-                HelpTools.SynchronizeReplacing(r, "Type", current, should,
-                    (fullName, pair) =>
-                    {
-                        File.Delete(pair.FileName);
-                        Console.WriteLine("Deleted {0}".Formato(pair.FileName));
-                    },
-                    (fullName, type) =>
-                    {
-                    },
-                    (fullName, pair, type) =>
-                    {
-                        EntityHelp.Synchronize(pair.FileName, pair.XDocument, type, s => SyncronizeContent(s, r, sd, namespaces));
-                    });
-            }
-
-            //Queries
-            {
-                var should = (from type in types
-                              from key in DynamicQueryManager.Current.GetTypeQueries(type).Keys
-                              select key).Distinct().ToDictionary(q => QueryUtils.GetQueryUniqueKey(q));
-
-                var current = FileNames(QueriesDirectory)
-                    .Select(fn => new { FileName = fn, XDocument = LoadAndValidate(fn) })
-                    .ToDictionary(p => QueryHelp.GetQueryFullName(p.XDocument, p.FileName), "Queries in HelpFiles");
-
-                HelpTools.SynchronizeReplacing(r, "Query", current, should,
-                    (fullName, pair) =>
-                    {
-                        File.Delete(pair.FileName);
-                        Console.WriteLine("Deleted {0}".Formato(pair.FileName));
-                    },
-                    (fullName, query) => { },
-                    (fullName, oldFile, query) =>
-                    {
-                        QueryHelp.Synchronize(oldFile.FileName, oldFile.XDocument, query, s => SyncronizeContent(s, r, sd, namespaces));
-                    });
-            }
-        }
-
         public static readonly Regex HelpLinkRegex = new Regex(@"^(?<letter>[^:]+):(?<link>[^\|]*)(\|(?<text>.*))?$");
 
-        static string SyncronizeContent(string content, Replacements r, StringDistance sd, HashSet<string> namespaces)
+        static string SynchronizeContent(string content, Replacements r, SyncData data)
         {
             if (content == null)
                 return null;
@@ -316,7 +558,7 @@ namespace Signum.Engine.Help
                 {
                     case WikiFormat.EntityLink:
                         {
-                            string type = r.SelectInteractive(link, TypeLogic.NameToType.Keys, "Type", sd);
+                            string type = r.SelectInteractive(link, TypeLogic.NameToType.Keys, "Type", data.StringDistance);
 
                             if (type == null)
                                 return Link(letter + "-error", link, text);
@@ -325,14 +567,14 @@ namespace Signum.Engine.Help
                         }
                     case WikiFormat.PropertyLink:
                         {
-                            string type = r.SelectInteractive(link.Before("."), TypeLogic.NameToType.Keys, "Type", sd);
+                            string type = r.SelectInteractive(link.Before("."), TypeLogic.NameToType.Keys, "Type", data.StringDistance);
 
                             if (type == null)
                                 return Link(letter + "-error", link, text);
 
                             var routes = PropertyRoute.GenerateRoutes(TypeLogic.GetType(type)).Select(a => a.PropertyString()).ToList();
 
-                            string pr = r.SelectInteractive(link.After('.'), routes, "PropertyRoutes-" + type, sd);
+                            string pr = r.SelectInteractive(link.After('.'), routes, "PropertyRoutes-" + type, data.StringDistance);
 
                             if (pr == null)
                                 return Link(letter + "-error", link, text);
@@ -341,7 +583,7 @@ namespace Signum.Engine.Help
                         }
                     case WikiFormat.QueryLink:
                         {
-                            string query = r.SelectInteractive(link, QueryLogic.QueryNames.Keys, "Query", sd);
+                            string query = r.SelectInteractive(link, QueryLogic.QueryNames.Keys, "Query", data.StringDistance);
 
                             if (query == null)
                                 return Link(letter + "-error", link, text);
@@ -350,7 +592,7 @@ namespace Signum.Engine.Help
                         }
                     case WikiFormat.OperationLink:
                         {
-                            string operation = r.SelectInteractive(link,  SymbolLogic<OperationSymbol>.AllUniqueKeys(), "Operation", sd);
+                            string operation = r.SelectInteractive(link, SymbolLogic<OperationSymbol>.AllUniqueKeys(), "Operation", data.StringDistance);
 
                             if (operation == null)
                                 return Link(letter + "-error", link, text);
@@ -360,12 +602,21 @@ namespace Signum.Engine.Help
                     case WikiFormat.Hyperlink: return m.Value;
                     case WikiFormat.NamespaceLink:
                         {
-                            string @namespace = r.SelectInteractive(link, namespaces, "Namespace", sd);
+                            string @namespace = r.SelectInteractive(link, data.Namespaces, "Namespace", data.StringDistance);
 
                             if (@namespace == null)
                                 return Link(letter + "-error", link, text);
 
                             return Link(letter, @namespace, text);
+                        }
+                    case WikiFormat.AppendixLink:
+                        {
+                            string appendix = r.SelectInteractive(link, data.Appendices, "Appendices", data.StringDistance);
+
+                            if (appendix == null)
+                                return Link(letter + "-error", link, text);
+
+                            return Link(letter, appendix, text);
                         }
                     default:
                         break;
@@ -378,10 +629,81 @@ namespace Signum.Engine.Help
         static string Link(string letter, string link, string text)
         {
             if (text.HasText())
-                return "[{0}:{1}|{2}]".Formato(letter, link, text);
+                return "[{0}:{1}|{2}]".FormatWith(letter, link, text);
             else
-                return "[{0}:{1}]".Formato(letter, link); 
+                return "[{0}:{1}]".FormatWith(letter, link);
         }
+
+        public static EntityHelpService GetEntityHelpService(Type type)
+        {
+            var entity = GetEntityHelp(type);
+
+            return new EntityHelpService
+            {
+                Type = type,
+
+                Info = GetHelpToolTipInfo(type.NiceName(), entity.Info, entity.Description, HelpUrls.EntityUrl(type)),
+
+                Operations = entity.Operations.Where(o => o.Value.IsAllowed() == null).ToDictionary(kvp => kvp.Key,
+                    kvp => GetHelpToolTipInfo(kvp.Value.OperationSymbol.NiceToString(), kvp.Value.Info, kvp.Value.UserDescription, HelpUrls.OperationUrl(type, kvp.Value.OperationSymbol))),
+
+                Properties = entity.Properties.Where(o => o.Value.IsAllowed() == null).ToDictionary(kvp => kvp.Key,
+                    kvp => GetHelpToolTipInfo(kvp.Value.PropertyInfo.NiceName(), kvp.Value.Info, kvp.Value.UserDescription, HelpUrls.PropertyUrl(kvp.Value.PropertyRoute))),
+            };
+        }
+
+        public static QueryHelpService GetQueryHelpService(object queryName)
+        {
+            var entity = GetQueryHelp(queryName);
+
+            var url = HelpUrls.QueryUrl(queryName);
+
+            return new QueryHelpService
+            {
+                QueryName = queryName,
+
+                Info = GetHelpToolTipInfo(QueryUtils.GetNiceName(queryName), entity.Info, entity.UserDescription, url),
+
+                Columns = entity.Columns.Where(a => a.Value.IsAllowed() == null).ToDictionary(kvp => kvp.Key, kvp =>
+                    GetHelpToolTipInfo(kvp.Value.NiceName, kvp.Value.Info, kvp.Value.UserDescription, url)),
+            };
+        }
+
+        public static Dictionary<PropertyRoute, HelpToolTipInfo> GetPropertyRoutesService(List<PropertyRoute> routes)
+        {
+            return routes.Where(p => p.IsAllowed() == null).GroupBy(a => a.RootType).SelectMany(r =>
+            {
+                var entity = GetEntityHelp(r.Key);
+
+                return r.Select(pr =>
+                {
+                    var simp = pr.SimplifyToPropertyOrRoot();
+
+                    if (simp.PropertyRouteType == PropertyRouteType.Root)
+                    {
+                        return KVP.Create(pr, GetHelpToolTipInfo(simp.RootType.NiceName(), entity.Info, entity.Description, HelpUrls.EntityUrl(pr.RootType)));
+                    }
+                    else
+                    {
+                        var prop = entity.Properties.GetOrThrow(simp);
+
+                        return KVP.Create(pr, GetHelpToolTipInfo(prop.PropertyInfo.NiceName(), prop.Info, prop.UserDescription, HelpUrls.PropertyUrl(pr)));
+                    }
+                });
+            }).ToDictionary();
+        }
+
+        static HelpToolTipInfo GetHelpToolTipInfo(string title, string info, string description, string link)
+        {
+            return new HelpToolTipInfo
+            {
+                Title = title,
+                Info = info.HasText() ? HelpWiki.NoLinkWikiSettings.WikiParse(info) : info,
+                Description = description.HasText() ? HelpWiki.NoLinkWikiSettings.WikiParse(description) : description,
+                Link = link
+            };
+        }
+
     }
 
     public static class WikiFormat
@@ -391,8 +713,8 @@ namespace Signum.Engine.Help
         public const string QueryLink = "q";
         public const string OperationLink = "o";
         public const string Hyperlink = "h";
-        public const string WikiLink = "w";
         public const string NamespaceLink = "n";
+        public const string AppendixLink = "a";
 
         public const string Separator = ":";
     }

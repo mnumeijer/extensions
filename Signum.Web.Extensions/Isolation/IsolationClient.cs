@@ -24,13 +24,13 @@ namespace Signum.Web.Isolation
             {
                 Navigator.RegisterArea(typeof(IsolationClient));
 
-                WidgetsHelper.GetWidget += ctx => ctx.Entity is IdentifiableEntity && MixinDeclarations.IsDeclared(ctx.Entity.GetType(), typeof(IsolationMixin)) ?
+                WidgetsHelper.GetWidget += ctx => ctx.Entity is Entity && MixinDeclarations.IsDeclared(ctx.Entity.GetType(), typeof(IsolationMixin)) ?
                     IsolationWidgetHelper.CreateWidget(ctx) : null;
 
-                Navigator.AddSetting(new EntitySettings<IsolationDN>());
-
+                Navigator.AddSetting(new EntitySettings<IsolationEntity> { PartialViewName = _ => ViewPrefix.FormatWith("Isolation") });
+                 
                 Constructor.ClientManager.GlobalPreConstructors += ctx =>
-                    (!MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)) || IsolationDN.Current != null) ? null :
+                    (!MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)) || IsolationEntity.Current != null) ? null :
                     Module["getIsolation"](ClientConstructorManager.ExtraJsonParams, ctx.Prefix,
                     IsolationMessage.SelectAnIsolation.NiceToString(),
                     GetIsolationChooserOptions(ctx.Type));
@@ -38,7 +38,7 @@ namespace Signum.Web.Isolation
                 //Unnecessary with the filter
                 Constructor.Manager.PreConstructors += ctx =>
                     !MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)) ? null :
-                    IsolationDN.Override(GetIsolation(ctx.Controller.ControllerContext)); 
+                    IsolationEntity.Override(GetIsolation(ctx.Controller.ControllerContext)); 
             }
         }
 
@@ -53,13 +53,13 @@ namespace Signum.Web.Isolation
             return list;
         }
 
-        public static Lite<IsolationDN> GetIsolation(ControllerContext ctx)
+        public static Lite<IsolationEntity> GetIsolation(ControllerContext ctx)
         {
             var isolation = ctx.Controller.ControllerContext.HttpContext.Request["Isolation"] ??
                 ctx.Controller.ControllerContext.HttpContext.Request.Headers["Isolation"];
 
             if (isolation.HasText())
-                return Lite.Parse<IsolationDN>(isolation);
+                return Lite.Parse<IsolationEntity>(isolation);
 
             return null;
         }
@@ -75,7 +75,7 @@ namespace Signum.Web.Isolation
 
             ViewDataDictionary viewData = filterContext.Controller.ViewData;
 
-            IDisposable isolation = IsolationDN.Override(iso);
+            IDisposable isolation = IsolationEntity.Override(iso);
             if (isolation != null)
                 viewData.Add(Key, isolation);
 
@@ -102,10 +102,10 @@ namespace Signum.Web.Isolation
             {
                 var model = ((ViewResult)filterContext.Result).Model;
 
-                IdentifiableEntity entity = (model as TypeContext).Try(tc => tc.UntypedValue as IdentifiableEntity) ?? model as IdentifiableEntity;
+                Entity entity = (model as TypeContext).Try(tc => tc.UntypedValue as Entity) ?? model as Entity;
 
                 if (entity != null)
-                    viewData[Key] = IsolationDN.Override(entity.TryIsolation());
+                    viewData[Key] = IsolationEntity.Override(entity.TryIsolation());
             }
         }
 

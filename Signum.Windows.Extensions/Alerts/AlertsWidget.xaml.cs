@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,12 +30,12 @@ namespace Signum.Windows.Alerts
 
         public event Action ForceShow;
 
-        public static AlertDN CreateAlert(IdentifiableEntity entity)
+        public static AlertEntity CreateAlert(Entity entity)
         {
             if(entity.IsNew)
                 return null;
 
-            return new AlertDN
+            return new AlertEntity
             {
                 Target = entity.ToLite(),
                 CreatedBy = UserHolder.Current.ToLite()
@@ -62,7 +62,7 @@ namespace Signum.Windows.Alerts
             if (e.OriginalSource is Button) //Not to capture the mouseDown of the scrollbar buttons
             {
                 Button b = (Button)e.OriginalSource;
-                Lite<AlertDN> alert = (Lite<AlertDN>)b.Tag;
+                Lite<AlertEntity> alert = (Lite<AlertEntity>)b.Tag;
                 ViewAlert(Server.RetrieveAndForget(alert));
             }
         }
@@ -72,12 +72,12 @@ namespace Signum.Windows.Alerts
             if (DataContext == null)
                 return;
 
-            AlertDN alert = CreateAlert((IdentifiableEntity)DataContext);
+            AlertEntity alert = CreateAlert((Entity)DataContext);
 
             ViewAlert(alert);
         }
 
-        private void ViewAlert(AlertDN alert)
+        private void ViewAlert(AlertEntity alert)
         {
             Navigator.Navigate(alert, new NavigateOptions()
             {
@@ -87,7 +87,7 @@ namespace Signum.Windows.Alerts
 
         public void ReloadAlerts()
         {
-            IdentifiableEntity entity = DataContext as IdentifiableEntity;
+            Entity entity = DataContext as Entity;
             if (entity == null || entity.IsNew)
             {
                 //lvAlerts.ItemsSource = null;
@@ -99,17 +99,17 @@ namespace Signum.Windows.Alerts
             CountAlerts(entity);
         }
 
-        public static Polymorphic<Func<IdentifiableEntity, FilterOption>> CustomFilter = new Polymorphic<Func<IdentifiableEntity, FilterOption>>();
+        public static Polymorphic<Func<Entity, FilterOption>> CustomFilter = new Polymorphic<Func<Entity, FilterOption>>();
 
-        void CountAlerts(IdentifiableEntity entity)
+        void CountAlerts(Entity entity)
         {
             var func = CustomFilter.TryGetValue(DataContext.GetType());
 
-            DynamicQueryServer.QueryGroupBatch(new QueryGroupOptions(typeof(AlertDN))
+            DynamicQueryServer.QueryGroupBatch(new QueryGroupOptions(typeof(AlertEntity))
             {
                 FilterOptions = new List<FilterOption>
                 {
-                     func != null ?  func((IdentifiableEntity)DataContext) : new FilterOption("Target", DataContext) { Frozen = true },
+                     func != null ?  func((Entity)DataContext) : new FilterOption("Target", DataContext) { Frozen = true },
                 },
                 ColumnOptions = new List<ColumnOption>
                 {
@@ -145,14 +145,14 @@ namespace Signum.Windows.Alerts
             if (DataContext == null)
                 return;
 
-            IdentifiableEntity entity = DataContext as IdentifiableEntity;
+            Entity entity = DataContext as Entity;
             ResultRow row = (ResultRow)((Button)sender).DataContext;
 
             AlertCurrentState state = (AlertCurrentState)row[0];
 
             var func = CustomFilter.TryGetValue(DataContext.GetType());
 
-            var eo = new ExploreOptions(typeof(AlertDN))
+            var eo = new ExploreOptions(typeof(AlertEntity))
             {
                 ShowFilters = false,
                 SearchOnLoad = true,

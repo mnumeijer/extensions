@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,7 +12,7 @@ namespace Signum.Entities.Omnibox
     {
         public int AutoCompleteLimit = 5;
 
-        Regex regex = new Regex(@"^I((?<id>N)|(?<toStr>S))?$", RegexOptions.ExplicitCapture);
+        Regex regex = new Regex(@"^I((?<id>N)|(?<id>G)|(?<toStr>S))?$", RegexOptions.ExplicitCapture);
 
         public override IEnumerable<EntityOmniboxResult> GetResults(string rawQuery, List<OmniboxToken> tokens, string tokenPattern)
         {
@@ -32,24 +32,26 @@ namespace Signum.Entities.Omnibox
             {
                 yield break;
             }
-            else if (tokens[1].Type == OmniboxTokenType.Number)
+            else if (tokens[1].Type == OmniboxTokenType.Number || tokens[1].Type == OmniboxTokenType.Guid)
             {
-                int id;
-                if (!int.TryParse(tokens[1].Value, out id))
-                    yield break;
-
                 foreach (var match in matches.OrderBy(ma => ma.Distance))
                 {
-                    Lite<IdentifiableEntity> lite = OmniboxParser.Manager.RetrieveLite((Type)match.Value, id);
+                    Type type = (Type)match.Value;
 
-                    yield return new EntityOmniboxResult
+                    PrimaryKey id;
+                    if(PrimaryKey.TryParse(tokens[1].Value, type, out id))
                     {
-                        Type = (Type)match.Value,
-                        TypeMatch = match,
-                        Id = id,
-                        Lite = lite,
-                        Distance = match.Distance,
-                    };
+                        Lite<Entity> lite = OmniboxParser.Manager.RetrieveLite(type, id);
+
+                        yield return new EntityOmniboxResult
+                        {
+                            Type = (Type)match.Value,
+                            TypeMatch = match,
+                            Id = id,
+                            Lite = lite,
+                            Distance = match.Distance,
+                        };
+                    }
                 }
             }
             else if (tokens[1].Type == OmniboxTokenType.String)
@@ -62,7 +64,7 @@ namespace Signum.Entities.Omnibox
 
                     if (autoComplete.Any())
                     {
-                        foreach (Lite<IdentifiableEntity> lite in autoComplete)
+                        foreach (Lite<Entity> lite in autoComplete)
                         {
                             OmniboxMatch distance = OmniboxUtils.Contains(lite, lite.ToString() ?? "", pattern);
 
@@ -100,8 +102,8 @@ namespace Signum.Entities.Omnibox
 
             return new List<HelpOmniboxResult>
             {
-                new HelpOmniboxResult { Text = "{0} Id".Formato(entityTypeName), OmniboxResultType = resultType },
-                new HelpOmniboxResult { Text = "{0} 'ToStr'".Formato(entityTypeName), OmniboxResultType = resultType }
+                new HelpOmniboxResult { Text = "{0} Id".FormatWith(entityTypeName), OmniboxResultType = resultType },
+                new HelpOmniboxResult { Text = "{0} 'ToStr'".FormatWith(entityTypeName), OmniboxResultType = resultType }
             };
         }
     }
@@ -111,20 +113,20 @@ namespace Signum.Entities.Omnibox
         public Type Type { get; set; }
         public OmniboxMatch TypeMatch { get; set; }
 
-        public int? Id { get; set; }
+        public PrimaryKey? Id { get; set; }
 
         public string ToStr { get; set; }
         public OmniboxMatch ToStrMatch { get; set; }
 
-        public Lite<IdentifiableEntity> Lite { get; set; }
+        public Lite<Entity> Lite { get; set; }
 
         public override string ToString()
         {
             if (Id.HasValue)
-                return "{0} {1}".Formato(Type.NicePluralName().ToOmniboxPascal(), Id, Lite.TryToString() ?? OmniboxMessage.NotFound.NiceToString());
+                return "{0} {1}".FormatWith(Type.NicePluralName().ToOmniboxPascal(), Id, Lite.TryToString() ?? OmniboxMessage.NotFound.NiceToString());
 
             if (ToStr != null)
-                return "{0} \"{1}\"".Formato(Type.NicePluralName().ToOmniboxPascal(), ToStr, Lite.TryToString() ?? OmniboxMessage.NotFound.NiceToString());
+                return "{0} \"{1}\"".FormatWith(Type.NicePluralName().ToOmniboxPascal(), ToStr, Lite.TryToString() ?? OmniboxMessage.NotFound.NiceToString());
 
             return Type.NicePluralName().ToOmniboxPascal();
         }

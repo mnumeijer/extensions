@@ -34,15 +34,16 @@ namespace Signum.Entities.Omnibox
         public static List<IOmniboxResultGenerator> Generators = new List<IOmniboxResultGenerator>();
 
         static readonly Regex tokenizer = new Regex(
-@"(?<entity>[a-zA-Z_][a-zA-Z0-9_]*;\d+)|
+@"(?<entity>[a-zA-Z_][a-zA-Z0-9_]*;(\d+|[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12}))|
 (?<space>\s+)|
+(?<guid>[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12})|
 (?<ident>[a-zA-Z_][a-zA-Z0-9_]*)|
 (?<ident>\[[a-zA-Z_][a-zA-Z0-9_]*\])|
 (?<number>[+-]?\d+(\.\d+)?)|
 (?<string>("".*?(""|$)|\'.*?(\'|$)))|
 (?<comparer>(" + FilterValueConverter.OperationRegex + @"))|
 (?<symbol>[\.\,;!?@#$%&/\\\(\)\^\*\[\]\{\}\-+])", 
-  RegexOptions.ExplicitCapture | RegexOptions.IgnorePatternWhitespace);
+  RegexOptions.ExplicitCapture | RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase);
 
         public static int MaxResults = 20;
 
@@ -92,6 +93,7 @@ namespace Signum.Entities.Omnibox
                     AddTokens(tokens, m, "symbol", OmniboxTokenType.Symbol);
                     AddTokens(tokens, m, "comparer", OmniboxTokenType.Comparer);
                     AddTokens(tokens, m, "number", OmniboxTokenType.Number);
+                    AddTokens(tokens, m, "guid", OmniboxTokenType.Guid);
                     AddTokens(tokens, m, "string", OmniboxTokenType.String);
                     AddTokens(tokens, m, "entity", OmniboxTokenType.Entity);
                 }
@@ -143,14 +145,14 @@ namespace Signum.Entities.Omnibox
 
         public abstract QueryDescription GetDescription(object queryName);
 
-        public abstract Lite<IdentifiableEntity> RetrieveLite(Type type, int id);
+        public abstract Lite<Entity> RetrieveLite(Type type, PrimaryKey id);
 
-        public List<Lite<IdentifiableEntity>> Autocomplete(Type type, string subString, int count)
+        public List<Lite<Entity>> Autocomplete(Type type, string subString, int count)
         {
             return Autocomplete(Implementations.By(type), subString, count);
         }
 
-        public abstract List<Lite<IdentifiableEntity>> Autocomplete(Implementations implementations, string subString, int count);
+        public abstract List<Lite<Entity>> Autocomplete(Implementations implementations, string subString, int count);
 
 
         protected abstract IEnumerable<object> GetAllQueryNames();
@@ -167,7 +169,7 @@ namespace Signum.Entities.Omnibox
 
         static ConcurrentDictionary<CultureInfo, Dictionary<string, Type>> types = new ConcurrentDictionary<CultureInfo, Dictionary<string, Type>>();
 
-        internal Dictionary<string, Type> Types()
+        public Dictionary<string, Type> Types()
         {
             return types.GetOrAdd(CultureInfo.CurrentUICulture, ci =>
                GetAllTypes().Where(t => !t.IsEnumEntityOrSymbol()).ToDictionary(t => t.NicePluralName().ToOmniboxPascal(), "Translated Types"));
@@ -183,6 +185,11 @@ namespace Signum.Entities.Omnibox
     {
         public string Text { get; set; }
         public Type OmniboxResultType { get; set; }
+
+        public override string ToString()
+        {
+            return "";
+        }
     }
 
     public interface IOmniboxResultGenerator
@@ -248,6 +255,7 @@ namespace Signum.Entities.Omnibox
                 case OmniboxTokenType.Number: return 'N';
                 case OmniboxTokenType.String: return 'S';
                 case OmniboxTokenType.Entity: return 'E';
+                case OmniboxTokenType.Guid: return 'G';
                 default: return '?';
             }
         }
@@ -261,5 +269,6 @@ namespace Signum.Entities.Omnibox
         Number,
         String,
         Entity,
+        Guid,
     }
 }

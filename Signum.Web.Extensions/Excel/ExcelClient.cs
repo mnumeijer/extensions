@@ -1,5 +1,4 @@
-#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,7 +18,6 @@ using Signum.Entities.UserQueries;
 using Signum.Web.Chart;
 using Signum.Entities.Excel;
 using Signum.Engine.Excel;
-#endregion
 
 namespace Signum.Web.Excel
 {
@@ -42,17 +40,17 @@ namespace Signum.Web.Excel
 
                 if (excelReport)
                 {
-                    if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(EmbeddedFileDN)))
-                        throw new InvalidOperationException("Call EmbeddedFileDN first");
+                    if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(EmbeddedFileEntity)))
+                        throw new InvalidOperationException("Call EmbeddedFileEntity first");
 
-                    if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(QueryDN)))
-                        Navigator.Manager.EntitySettings.Add(typeof(QueryDN), new EntitySettings<QueryDN>());
+                    if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(QueryEntity)))
+                        Navigator.Manager.EntitySettings.Add(typeof(QueryEntity), new EntitySettings<QueryEntity>());
 
                     
                     Navigator.AddSettings(new List<EntitySettings>{
-                        new EntitySettings<ExcelReportDN> 
+                        new EntitySettings<ExcelReportEntity> 
                         { 
-                            PartialViewName = _ => ViewPrefix.Formato("ExcelReport"),
+                            PartialViewName = _ => ViewPrefix.FormatWith("ExcelReport"),
                         }
                     });
                 }
@@ -66,11 +64,6 @@ namespace Signum.Web.Excel
         {
             if (ctx.Prefix.HasText())
                 return null;
-
-            Lite<UserQueryDN> currentUserQuery = null;
-            string url = (ctx.ControllerContext.RouteData.Route as Route).Try(r => r.Url);
-            if (url.HasText() && url.Contains("UQ"))
-                currentUserQuery = Lite.Create<UserQueryDN>(int.Parse(ctx.ControllerContext.RouteData.Values["lite"].ToString()));
             
             if (ExcelReport) 
             {
@@ -79,14 +72,14 @@ namespace Signum.Web.Excel
                 if (ToExcelPlain)
                     items.Add(PlainExcel(ctx).ToMenuItem());
 
-                List<Lite<ExcelReportDN>> reports = ExcelLogic.GetExcelReports(ctx.QueryName);
+                List<Lite<ExcelReportEntity>> reports = ExcelLogic.GetExcelReports(ctx.QueryName);
 
                 if (reports.Count > 0)
                 {
                     if (items.Count > 0)
                         items.Add(new MenuItemSeparator());
 
-                    foreach (Lite<ExcelReportDN> report in reports)
+                    foreach (Lite<ExcelReportEntity> report in reports)
                     {
                         items.Add(new MenuItem(ctx.Prefix, "sfExcelReport" + report.Id)
                         {
@@ -99,13 +92,13 @@ namespace Signum.Web.Excel
 
                 items.Add(new MenuItemSeparator());
 
-                var current =  QueryLogic.GetQuery(ctx.QueryName).ToLite().Key();
+                var current =  QueryLogic.GetQueryEntity(ctx.QueryName).ToLite().Key();
 
                 items.Add(new MenuItem(ctx.Prefix, "qbReportAdminister")
                 {
                     Title = ExcelMessage.Administer.NiceToString(),
                     Text = ExcelMessage.Administer.NiceToString(),
-                    OnClick = Module["administerExcelReports"](ctx.Prefix, Finder.ResolveWebQueryName(typeof(ExcelReportDN)),current),
+                    OnClick = Module["administerExcelReports"](ctx.Prefix, Finder.ResolveWebQueryName(typeof(ExcelReportEntity)),current),
                 });
 
                 items.Add(new MenuItem(ctx.Prefix, "qbReportCreate")

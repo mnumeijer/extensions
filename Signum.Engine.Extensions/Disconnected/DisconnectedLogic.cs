@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Signum.Engine.Maps;
 using Signum.Entities;
 using Signum.Utilities;
+using Signum.Utilities.DataStructures;
 using System.Linq.Expressions;
 using Signum.Entities.Authorization;
 using Signum.Engine.DynamicQuery;
@@ -34,16 +35,16 @@ namespace Signum.Engine.Disconnected
         public static ImportManager ImportManager = new ImportManager();
         public static LocalBackupManager LocalBackupManager = new LocalBackupManager();
 
-        static Expression<Func<DisconnectedMachineDN, IQueryable<DisconnectedImportDN>>> ImportsExpression =
-                m => Database.Query<DisconnectedImportDN>().Where(di => di.Machine.RefersTo(m));
-        public static IQueryable<DisconnectedImportDN> Imports(this DisconnectedMachineDN m)
+        static Expression<Func<DisconnectedMachineEntity, IQueryable<DisconnectedImportEntity>>> ImportsExpression =
+                m => Database.Query<DisconnectedImportEntity>().Where(di => di.Machine.RefersTo(m));
+        public static IQueryable<DisconnectedImportEntity> Imports(this DisconnectedMachineEntity m)
         {
             return ImportsExpression.Evaluate(m);
         }
 
-        static Expression<Func<DisconnectedMachineDN, IQueryable<DisconnectedImportDN>>> ExportsExpression =
-               m => Database.Query<DisconnectedImportDN>().Where(di => di.Machine.RefersTo(m));
-        public static IQueryable<DisconnectedImportDN> Exports(this DisconnectedMachineDN m)
+        static Expression<Func<DisconnectedMachineEntity, IQueryable<DisconnectedImportEntity>>> ExportsExpression =
+               m => Database.Query<DisconnectedImportEntity>().Where(di => di.Machine.RefersTo(m));
+        public static IQueryable<DisconnectedImportEntity> Exports(this DisconnectedMachineEntity m)
         {
             return ExportsExpression.Evaluate(m);
         }
@@ -52,12 +53,12 @@ namespace Signum.Engine.Disconnected
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
-                sb.Include<DisconnectedMachineDN>();
-                sb.Include<DisconnectedExportDN>();
-                sb.Include<DisconnectedImportDN>();
+                sb.Include<DisconnectedMachineEntity>();
+                sb.Include<DisconnectedExportEntity>();
+                sb.Include<DisconnectedImportEntity>();
 
-                dqm.RegisterQuery(typeof(DisconnectedMachineDN), () =>
-                    from dm in Database.Query<DisconnectedMachineDN>()
+                dqm.RegisterQuery(typeof(DisconnectedMachineEntity), () =>
+                    from dm in Database.Query<DisconnectedMachineEntity>()
                     select new
                     {
                         Entity = dm,
@@ -67,8 +68,8 @@ namespace Signum.Engine.Disconnected
                         dm.SeedMax,
                     });
 
-                dqm.RegisterQuery(typeof(DisconnectedExportDN), () =>
-                    from dm in Database.Query<DisconnectedExportDN>()
+                dqm.RegisterQuery(typeof(DisconnectedExportEntity), () =>
+                    from dm in Database.Query<DisconnectedExportEntity>()
                     select new
                     {
                         Entity = dm,
@@ -79,8 +80,8 @@ namespace Signum.Engine.Disconnected
                         dm.Exception,
                     });
 
-                dqm.RegisterQuery(typeof(DisconnectedImportDN), () =>
-                    from dm in Database.Query<DisconnectedImportDN>()
+                dqm.RegisterQuery(typeof(DisconnectedImportEntity), () =>
+                    from dm in Database.Query<DisconnectedImportEntity>()
                     select new
                     {
                         Entity = dm,
@@ -91,22 +92,39 @@ namespace Signum.Engine.Disconnected
                         dm.Exception,
                     });
 
-                dqm.RegisterExpression((DisconnectedMachineDN dm) => dm.Imports(), ()=>DisconnectedMessage.Imports.NiceToString());
-                dqm.RegisterExpression((DisconnectedMachineDN dm) => dm.Exports(), ()=>DisconnectedMessage.Exports.NiceToString());
-
-
+                dqm.RegisterExpression((DisconnectedMachineEntity dm) => dm.Imports(), ()=>DisconnectedMessage.Imports.NiceToString());
+                dqm.RegisterExpression((DisconnectedMachineEntity dm) => dm.Exports(), ()=>DisconnectedMessage.Exports.NiceToString());
+                
                 MachineGraph.Register();
 
+                sb.Schema.SchemaCompleted += AssertDisconnectedStrategies;
 
-                sb.Schema.Initializing += AssertDisconnectedStrategies;
+                sb.Schema.EntityEventsGlobal.Saving += new SavingEventHandler<Entity>(EntityEventsGlobal_Saving);
 
-                sb.Schema.EntityEventsGlobal.Saving += new SavingEventHandler<IdentifiableEntity>(EntityEventsGlobal_Saving);
+                sb.Schema.Table<TypeEntity>().PreDeleteSqlSync += new Func<Entity, SqlPreCommand>(AuthCache_PreDeleteSqlSync);
 
-                sb.Schema.Table<TypeDN>().PreDeleteSqlSync += new Func<IdentifiableEntity, SqlPreCommand>(AuthCache_PreDeleteSqlSync);
+                Validator.PropertyValidator((DisconnectedMachineEntity d) => d.SeedMin).StaticPropertyValidation += (dm, pi) => ValidateDisconnectedMachine(dm, pi, isMin: true);
+                Validator.PropertyValidator((DisconnectedMachineEntity d) => d.SeedMax).StaticPropertyValidation += (dm, pi) => ValidateDisconnectedMachine(dm, pi, isMin: false);
             }
         }
 
-        class MachineGraph : Graph<DisconnectedMachineDN, DisconnectedMachineState>
+        static string ValidateDisconnectedMachine(DisconnectedMachineEntity dm, PropertyInfo pi, bool isMin)
+        {
+            var conflicts = Database.Query<DisconnectedMachineEntity>()
+                .Where(e => e.SeedInterval.Overlap(dm.SeedInterval) && e != dm)
+                .Select(e => new { e.SeedInterval,  Machine = e.ToLite() } )
+                .ToList();
+
+            conflicts = conflicts.Where(c => c.SeedInterval.Contains(isMin ? dm.SeedMin : dm.SeedMax) ||
+                dm.SeedInterval.Subset(c.SeedInterval) || c.SeedInterval.Subset(dm.SeedInterval)).ToList();
+
+            if (conflicts.Any())
+                return DisconnectedMessage._0OverlapsWith1.NiceToString(pi.NiceName(), conflicts.CommaAnd(s => "{0} {1}".FormatWith(s.Machine, s.SeedInterval)));
+
+            return null;
+        }
+
+        class MachineGraph : Graph<DisconnectedMachineEntity, DisconnectedMachineState>
         {
             public static void Register()
             {
@@ -118,7 +136,10 @@ namespace Signum.Engine.Disconnected
                     ToState = DisconnectedMachineState.Connected,
                     AllowsNew = true,
                     Lite = false,
-                    Execute = (dm, _) => { }
+                    Execute = (dm, _) => 
+                    {
+
+                    }
                 }.Register();
 
                 new Execute(DisconnectedMachineOperation.UnsafeUnlock)
@@ -132,7 +153,7 @@ namespace Signum.Engine.Disconnected
                     }
                 }.Register();
 
-                new Graph<DisconnectedImportDN>.ConstructFrom<DisconnectedMachineDN>(DisconnectedMachineOperation.FixImport)
+                new Graph<DisconnectedImportEntity>.ConstructFrom<DisconnectedMachineEntity>(DisconnectedMachineOperation.FixImport)
                 {
                     CanConstruct = dm => dm.State.InState(DisconnectedMachineState.Faulted),
                     Construct = (dm, _) =>
@@ -143,19 +164,19 @@ namespace Signum.Engine.Disconnected
             }
         }
 
-        static SqlPreCommand AuthCache_PreDeleteSqlSync(IdentifiableEntity arg)
+        static SqlPreCommand AuthCache_PreDeleteSqlSync(Entity arg)
         {
-            TypeDN type = (TypeDN)arg;
+            TypeEntity type = (TypeEntity)arg;
 
-            var ce = Administrator.UnsafeDeletePreCommand(Database.MListQuery((DisconnectedExportDN de) => de.Copies).Where(mle => mle.Element.Type.RefersTo(type)));
-            var ci = Administrator.UnsafeDeletePreCommand(Database.MListQuery((DisconnectedImportDN di) => di.Copies).Where(mle => mle.Element.Type.RefersTo(type)));
+            var ce = Administrator.UnsafeDeletePreCommand(Database.MListQuery((DisconnectedExportEntity de) => de.Copies).Where(mle => mle.Element.Type.RefersTo(type)));
+            var ci = Administrator.UnsafeDeletePreCommand(Database.MListQuery((DisconnectedImportEntity di) => di.Copies).Where(mle => mle.Element.Type.RefersTo(type)));
 
             return SqlPreCommand.Combine(Spacing.Simple, ce, ci);
         }
 
 
 
-        static void EntityEventsGlobal_Saving(IdentifiableEntity ident)
+        static void EntityEventsGlobal_Saving(Entity ident)
         {
             if (ident.IsGraphModified)
             {
@@ -165,33 +186,69 @@ namespace Signum.Engine.Disconnected
 
         static void AssertDisconnectedStrategies()
         {
+            Schema s = Schema.Current;
+
             var result = EnumerableExtensions.JoinStrict(
                 strategies.Keys,
-                Schema.Current.Tables.Keys.Where(a => !a.IsEnumEntity()),
+                s.Tables.Keys.Where(a => !a.IsEnumEntity()),
                 a => a,
                 a => a,
                 (a, b) => 0);
 
-            var extra = result.Extra.OrderBy(a => a.Namespace).ThenBy(a => a.Name).ToString(t => "  DisconnectedLogic.Register<{0}>(Download.None, Upload.None);".Formato(t.Name), "\r\n");
+            var extra = result.Extra.OrderBy(a => a.Namespace).ThenBy(a => a.Name).ToString(t => "  DisconnectedLogic.Register<{0}>(Download.None, Upload.None);".FormatWith(t.Name), "\r\n");
 
-            var lacking = result.Missing.GroupBy(a => a.Namespace).OrderBy(gr => gr.Key).ToString(gr => "  //{0}\r\n".Formato(gr.Key) +
-                gr.ToString(t => "  DisconnectedLogic.Register<{0}>(Download.None, Upload.None);".Formato(t.Name), "\r\n"), "\r\n\r\n");
+            var lacking = result.Missing.GroupBy(a => a.Namespace).OrderBy(gr => gr.Key).ToString(gr => "  //{0}\r\n".FormatWith(gr.Key) +
+                gr.ToString(t => "  DisconnectedLogic.Register<{0}>(Download.None, Upload.None);".FormatWith(t.Name), "\r\n"), "\r\n\r\n");
 
             if (extra.HasText() || lacking.HasText())
                 throw new InvalidOperationException("DisconnectedLogic's download strategies are not synchronized with the Schema.\r\n" +
                         (extra.HasText() ? ("Remove something like:\r\n" + extra + "\r\n\r\n") : null) +
                         (lacking.HasText() ? ("Add something like:\r\n" + lacking + "\r\n\r\n") : null));
 
+            string errors = strategies.Where(kvp=>kvp.Value.Upload == Upload.Subset && s.Table(kvp.Key).Ticks == null).ToString(a=>a.Key.Name, "\r\n");
+            if (errors.HasText())
+                throw new InvalidOperationException("Ticks is mandatory for this Disconnected strategy. Tables: \r\n" + errors.Indent(4));
+
+            foreach (var item in strategies.Where(kvp => kvp.Value.Upload != Upload.None).Select(a => a.Key))
+            {
+                giRegisterPreUnsafeInsert.GetInvoker(item)();
+            }
+
             ExportManager.Initialize();
             ImportManager.Initialize();
         }
 
-        public static DisconnectedStrategy<T> Register<T>(Download download, Upload upload) where T : IdentifiableEntity
+
+        static readonly GenericInvoker<Action> giRegisterPreUnsafeInsert = new GenericInvoker<Action>(() => Register_PreUnsafeInsert<Entity>());
+        static void Register_PreUnsafeInsert<T>() where T : Entity
+        {
+            Schema.Current.EntityEvents<T>().PreUnsafeInsert += (IQueryable query, LambdaExpression constructor, IQueryable<T> entityQuery) =>
+            {
+                if (constructor.Body.Type == typeof(T))
+                {
+                    var newBody = Expression.Call(
+                      miSetMixin.MakeGenericMethod(typeof(T), typeof(DisconnectedCreatedMixin), typeof(bool)),
+                      constructor.Body,
+                      Expression.Quote(disconnectedCreated),
+                      Expression.Constant(DisconnectedLogic.OfflineMode));
+
+                    return Expression.Lambda(newBody, constructor.Parameters);
+                }
+
+                return constructor; //MListTable
+            };
+        }
+
+        static MethodInfo miSetMixin = ReflectionTools.GetMethodInfo((Entity a) => a.SetMixin((DisconnectedCreatedMixin m) => m.DisconnectedCreated, true)).GetGenericMethodDefinition();
+        static Expression<Func<DisconnectedCreatedMixin, bool>> disconnectedCreated = (DisconnectedCreatedMixin m) => m.DisconnectedCreated;
+
+
+        public static DisconnectedStrategy<T> Register<T>(Download download, Upload upload) where T : Entity
         {
             return Register(new DisconnectedStrategy<T>(download, null, upload, null, new BasicImporter<T>()));
         }
 
-        public static DisconnectedStrategy<T> Register<T>(Expression<Func<T, bool>> downloadSubset, Upload upload) where T : IdentifiableEntity
+        public static DisconnectedStrategy<T> Register<T>(Expression<Func<T, bool>> downloadSubset, Upload upload) where T : Entity
         {
             return Register(new DisconnectedStrategy<T>(Download.Subset, downloadSubset, upload, null, new BasicImporter<T>()));
         }
@@ -211,29 +268,30 @@ namespace Signum.Engine.Disconnected
             return Register(new DisconnectedStrategy<T>(Download.Subset, subset, Upload.Subset, subset, new UpdateImporter<T>()));
         }
 
-        static DisconnectedStrategy<T> Register<T>(DisconnectedStrategy<T> stragety) where T : IdentifiableEntity
+
+        static DisconnectedStrategy<T> Register<T>(DisconnectedStrategy<T> stragety) where T : Entity
         {
             if (typeof(T).IsEnumEntity())
-                throw new InvalidOperationException("EnumProxies can not be registered on DisconnectedLogic");
+                throw new InvalidOperationException("EnumEntities can not be registered on DisconnectedLogic");
 
             strategies.AddOrThrow(typeof(T), stragety, "{0} has already been registered");
 
             return stragety;
         }
 
-        public static DisconnectedExportDN GetDownloadEstimation(Lite<DisconnectedMachineDN> machine)
+        public static DisconnectedExportEntity GetDownloadEstimation(Lite<DisconnectedMachineEntity> machine)
         {
-            return Database.Query<DisconnectedExportDN>().Where(a => a.Total.HasValue).OrderBy(a => a.Machine == machine ? 0 : 1).ThenBy(a => a.Id).LastOrDefault();
+            return Database.Query<DisconnectedExportEntity>().Where(a => a.Total.HasValue).OrderBy(a => a.Machine == machine ? 0 : 1).ThenBy(a => a.Id).LastOrDefault();
         }
 
-        public static DisconnectedImportDN GetUploadEstimation(Lite<DisconnectedMachineDN> machine)
+        public static DisconnectedImportEntity GetUploadEstimation(Lite<DisconnectedMachineEntity> machine)
         {
-            return Database.Query<DisconnectedImportDN>().Where(a => a.Total.HasValue).OrderBy(a => a.Machine == machine ? 0 : 1).ThenBy(a => a.Id).LastOrDefault();
+            return Database.Query<DisconnectedImportEntity>().Where(a => a.Total.HasValue).OrderBy(a => a.Machine == machine ? 0 : 1).ThenBy(a => a.Id).LastOrDefault();
         }
 
-        public static Lite<DisconnectedMachineDN> GetDisconnectedMachine(string machineName)
+        public static Lite<DisconnectedMachineEntity> GetDisconnectedMachine(string machineName)
         {
-            return Database.Query<DisconnectedMachineDN>().Where(a => a.MachineName == machineName).Select(a => a.ToLite()).SingleOrDefault();
+            return Database.Query<DisconnectedMachineEntity>().Where(a => a.MachineName == machineName).Select(a => a.ToLite()).SingleOrDefault();
         }
 
 
@@ -249,7 +307,7 @@ namespace Signum.Engine.Disconnected
 
             public Type Type { get; private set; }
 
-            public void Saving(IdentifiableEntity ident)
+            public void Saving(Entity ident)
             {
                 return;
             }
@@ -302,13 +360,13 @@ namespace Signum.Engine.Disconnected
 
         bool? DisableForeignKeys { get; set; }
 
-        void Saving(IdentifiableEntity ident);
+        void Saving(Entity ident);
 
         ICustomImporter Importer { get; set; }
         ICustomExporter Exporter { get; set; }
     }
 
-    public class DisconnectedStrategy<T> : IDisconnectedStrategy where T : IdentifiableEntity
+    public class DisconnectedStrategy<T> : IDisconnectedStrategy where T : Entity
     {
         internal DisconnectedStrategy(Download download, Expression<Func<T, bool>> downloadSubset, Upload upload, Expression<Func<T, bool>> uploadSubset, BasicImporter<T> importer)
         {
@@ -318,9 +376,12 @@ namespace Signum.Engine.Disconnected
             this.Download = download;
             this.DownloadSubset = downloadSubset;
 
-            if (typeof(T) == typeof(DisconnectedExportDN) && (download != Download.None || upload != Upload.None))
-                throw new InvalidOperationException("{0} should have DownloadStrategy and UploadStratey = None".Formato(typeof(T).NiceName()));
+            if (typeof(T) == typeof(DisconnectedExportEntity) && (download != Download.None || upload != Upload.None))
+                throw new InvalidOperationException("{0} should have DownloadStrategy and UploadStratey = None".FormatWith(typeof(T).NiceName()));
 
+            if (upload != Upload.None)
+                MixinDeclarations.Register(typeof(T), typeof(DisconnectedCreatedMixin));
+             
             if (upload == Upload.Subset)
             {
                 if (uploadSubset == null)
@@ -329,7 +390,7 @@ namespace Signum.Engine.Disconnected
                 if (download == Download.None)
                     throw new InvalidOperationException("Upload.Subset is not compatible with Download.None, choose Upload.New instead");
 
-                MixinDeclarations.Register(typeof(T), typeof(DisconnectedMixin));
+                MixinDeclarations.Register(typeof(T), typeof(DisconnectedSubsetMixin));
             }
 
             this.Upload = upload;
@@ -346,41 +407,43 @@ namespace Signum.Engine.Disconnected
         public Upload Upload { get; private set; }
         public Expression<Func<T, bool>> UploadSubset { get; private set; }
 
-        public void Saving(IdentifiableEntity ident)
+        public void Saving(Entity entity)
         {
             if (DisconnectedLogic.OfflineMode)
             {
                 if (Upload == Upload.None)
-                    throw new ApplicationException(DisconnectedMessage.NotAllowedToSave0WhileOffline.NiceToString().Formato(ident.GetType().NicePluralName()));
+                    throw new ApplicationException(DisconnectedMessage.NotAllowedToSave0WhileOffline.NiceToString().FormatWith(entity.GetType().NicePluralName()));
 
-                if (ident.IsNew)
+                if (entity.Mixin<DisconnectedCreatedMixin>().DisconnectedCreated)
                     return;
+
+                if (entity.IsNew)
+                {
+                    entity.Mixin<DisconnectedCreatedMixin>().DisconnectedCreated = true;
+                    return;
+                }
 
                 if (Upload == Upload.Subset)
                 {
-                    var dm = ident.Mixin<DisconnectedMixin>();
+                    var dm = entity.Mixin<DisconnectedSubsetMixin>();
 
                     if (dm.DisconnectedMachine != null)
                     {
-                        if (!dm.DisconnectedMachine.Is(DisconnectedMachineDN.Current))
-                            throw new ApplicationException(DisconnectedMessage.The0WithId12IsLockedBy3.NiceToString().Formato(ident.GetType().NiceName(), ident.Id, ident.ToString(), dm.DisconnectedMachine));
+                        if (!dm.DisconnectedMachine.Is(DisconnectedMachineEntity.Current))
+                            throw new ApplicationException(DisconnectedMessage.NotAllowedToSave0WhileOffline.NiceToString().FormatWith(entity.GetType().NiceName(), entity.Id, entity.ToString(), dm.DisconnectedMachine));
                         else
                             return;
                     }
                 }
-
-                if (!DisconnectedExportRanges.InModifiableRange(ident.GetType(), ident.Id))
-                    throw new ApplicationException(AuthMessage.NotAllowedToSaveThis0WhileOffline.NiceToString().Formato(ident.GetType().NiceName()));
-
             }
             else
             {
                 if (Upload == Upload.Subset)
                 {
-                    var dm = ident.Mixin<DisconnectedMixin>();
+                    var dm = entity.Mixin<DisconnectedSubsetMixin>();
 
                     if (dm.DisconnectedMachine != null)
-                        throw new ApplicationException(DisconnectedMessage.The0WithId12IsLockedBy3.NiceToString().Formato(ident.GetType().NiceName(), ident.Id, ident.ToString(), dm.DisconnectedMachine));
+                        throw new ApplicationException(DisconnectedMessage.The0WithId12IsLockedBy3.NiceToString().FormatWith(entity.GetType().NiceName(), entity.Id, entity.ToString(), dm.DisconnectedMachine));
                 }
             }
         }

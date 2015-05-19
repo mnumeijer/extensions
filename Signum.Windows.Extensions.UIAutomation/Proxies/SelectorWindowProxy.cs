@@ -27,7 +27,7 @@ namespace Signum.Windows.UIAutomation
             Select(type.FullName);
         }
 
-        public void Select<T>() where T : IdentifiableEntity
+        public void Select<T>() where T : Entity
         {
             Select(typeof(T).FullName);
         }
@@ -36,7 +36,7 @@ namespace Signum.Windows.UIAutomation
         {
             return Element.CaptureWindow(
                 () => Select(value),
-                () => "select {0} on selector window".Formato(value), timeout);
+                () => "select {0} on selector window".FormatWith(value), timeout);
         }
 
         public AutomationElement SelectCapture(Type type, int? timeout = null)
@@ -44,7 +44,7 @@ namespace Signum.Windows.UIAutomation
             return SelectCapture(type.FullName, timeout);
         }
 
-        public NormalWindowProxy<T> SelectCapture<T>(int? timeout = null) where T : IdentifiableEntity
+        public NormalWindowProxy<T> SelectCapture<T>(int? timeout = null) where T : Entity
         {
             return new NormalWindowProxy<T>(SelectCapture(typeof(T).FullName, timeout));
         }

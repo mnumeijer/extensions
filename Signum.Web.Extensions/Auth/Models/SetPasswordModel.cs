@@ -1,5 +1,4 @@
-﻿#region usings
-using System;
+﻿using System;
 using System.Web;
 using System.Web.Mvc;
 using System.Web.Security;
@@ -20,7 +19,6 @@ using System.Collections.Generic;
 using Signum.Engine.Operations;
 using Signum.Web.Operations;
 using System.ComponentModel;
-#endregion
 
 
 namespace Signum.Web.Auth
@@ -28,12 +26,12 @@ namespace Signum.Web.Auth
     [Serializable, Description("")]
     public class SetPasswordModel : ModelEntity
     {
-        string password;
+        byte[] passwordHash;
         [NotNullValidator]
-        public string Password
+        public byte[] PasswordHash
         {
-            get { return password; }
-            set { Set(ref password, value); }
+            get { return passwordHash; }
+            set { Set(ref passwordHash, value); }
         }
     }
 }

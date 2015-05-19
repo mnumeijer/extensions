@@ -1,5 +1,4 @@
-﻿#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -23,7 +22,6 @@ using Signum.Engine.Operations;
 using Signum.Engine.SMS;
 using Signum.Entities.Processes;
 using Signum.Web.Operations;
-#endregion
 
 namespace Signum.Web.SMS
 {
@@ -50,7 +48,7 @@ namespace Signum.Web.SMS
         [HttpPost]
         public JsonNetResult GetLiteralsForType()
         {
-            var type = this.ParseLite<TypeDN>("type");
+            var type = this.ParseLite<TypeEntity>("type");
             return this.JsonNet(new
             {
                 literals = SMSLogic.GetLiteralsFromDataObjectProvider(type.Retrieve().ToType())
@@ -60,8 +58,8 @@ namespace Signum.Web.SMS
         [HttpPost]
         public ActionResult CreateSMSMessageFromTemplate()
         {
-            var ie = this.ExtractLite<IdentifiableEntity>();
-            var template = Lite.Parse<SMSTemplateDN>(Request["template"]);
+            var ie = this.ExtractLite<Entity>();
+            var template = Lite.Parse<SMSTemplateEntity>(Request["template"]);
 
             var message = ie.ConstructFromLite(SMSMessageOperation.CreateSMSWithTemplateFromEntity, template.Retrieve());
             return this.DefaultConstructResult(message);
@@ -70,9 +68,9 @@ namespace Signum.Web.SMS
         [HttpPost]
         public ActionResult SendMultipleMessagesFromTemplate()
         {
-            var template = Lite.Parse<SMSTemplateDN>(Request["template"]);
+            var template = Lite.Parse<SMSTemplateEntity>(Request["template"]);
 
-            var lites = this.ParseLiteKeys<IdentifiableEntity>();
+            var lites = this.ParseLiteKeys<Entity>();
 
             var process = OperationLogic.ConstructFromMany(lites, SMSMessageOperation.SendSMSMessagesFromTemplate, template.Retrieve());
 
@@ -82,7 +80,7 @@ namespace Signum.Web.SMS
         [HttpPost]
         public PartialViewResult SendMultipleSMSMessagesModel()
         {
-            return this.PopupView(new MultipleSMSModel(), new PopupViewOptions(""));
+            return this.PopupView(new MultipleSMSModel());
         }
 
         [HttpPost]
@@ -92,7 +90,7 @@ namespace Signum.Web.SMS
 
             var model = this.ExtractEntity<MultipleSMSModel>(prefixModel).ApplyChanges(this, prefixModel).Value;
 
-            var lites = this.ParseLiteKeys<IdentifiableEntity>();
+            var lites = this.ParseLiteKeys<Entity>();
 
             var process = OperationLogic.ConstructFromMany(lites, SMSMessageOperation.SendSMSMessages, model);
 

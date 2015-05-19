@@ -13,7 +13,7 @@ namespace Signum.Web.Basic
 {
     public static class BasicClient
     {
-        public static string ViewPrefix = "~/basic/Views/{0}.cshtml";
+        public static string ViewPrefix = "~/Basic/Views/{0}.cshtml";
 
         public static void Start()
         {
@@ -23,7 +23,7 @@ namespace Signum.Web.Basic
 
                 Navigator.AddSettings(new List<EntitySettings>
                 {
-                    new EmbeddedEntitySettings<DateSpanDN> { PartialViewName = _ => ViewPrefix.Formato("DateSpan") },
+                    new EmbeddedEntitySettings<DateSpanEntity> { PartialViewName = _ => ViewPrefix.FormatWith("DateSpan") },
                 });
             }
         }

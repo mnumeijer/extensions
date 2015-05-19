@@ -2,14 +2,14 @@
 @using Signum.Entities.Dashboard
 @using Signum.Web.Dashboard
 @using Signum.Entities.UserAssets
-@model DashboardDN
+@model DashboardEntity
 @section head
 {
     @Html.ScriptCss("~/Dashboard/Content/Dashboard.css")
 
 }
 @{
-    var currentEntity = (IdentifiableEntity)ViewData["currentEntity"];
+    var currentEntity = (Entity)ViewData["currentEntity"];
 }
 
 @if (currentEntity != null)
@@ -35,7 +35,7 @@
     <h2>
         @if (Navigator.IsNavigable(Model, null, isSearch: true))
         { 
-            <a href="@Navigator.NavigateRoute(typeof(DashboardDN), Model.Id)">@Model.DisplayName</a>
+            <a href="@Navigator.NavigateRoute(typeof(DashboardEntity), Model.Id)">@Model.DisplayName</a>
         }
         else
         {
@@ -45,7 +45,7 @@
     
       
 
-        Html.RenderPartial(DashboardClient.ViewPrefix.Formato("DashboardView"), Model);
+        Html.RenderPartial(DashboardClient.ViewPrefix.FormatWith("DashboardView"), Model);
 
         if (Model.AutoRefreshPeriod != null)
         {

@@ -21,7 +21,6 @@ using Signum.Entities.UserQueries;
 using Signum.Engine.UserQueries;
 using Signum.Entities.SMS;
 using Signum.Engine.Chart;
-using Signum.Engine.Exceptions;
 using System.IO;
 using System.Xml;
 using Signum.Engine.Profiler;
@@ -39,15 +38,16 @@ using Signum.Engine.ViewLog;
 using Signum.Engine.DiffLog;
 using Signum.Entities.Isolation;
 using Signum.Engine.Isolation;
+using Signum.Engine.Help;
 
 namespace Signum.Services
 {
     public abstract class ServerExtensions : ServerBasic, ILoginServer, IQueryServer, IProcessServer, IDashboardServer,
         IChartServer, IExcelReportServer, IUserQueryServer, IQueryAuthServer, IPropertyAuthServer, IUserAssetsServer,
         ITypeAuthServer, IPermissionAuthServer, IOperationAuthServer, ISmsServer,
-        IProfilerServer, IDiffLogServer, IIsolationServer
+        IProfilerServer, IDiffLogServer, IIsolationServer, IHelpServer
     {
-        public override IdentifiableEntity Retrieve(Type type, int id)
+        public override Entity Retrieve(Type type, PrimaryKey id)
         {
             using (ViewLogLogic.LogView(Lite.Create(type, id), "WCFRetrieve"))
                 return base.Retrieve(type, id);
@@ -55,15 +55,15 @@ namespace Signum.Services
 
 
         #region ILoginServer Members
-        public virtual void Login(string username, string passwordHash)
+        public virtual void Login(string username, byte[] passwordHash)
         {
             Execute(MethodInfo.GetCurrentMethod(), null, () =>
             {
-                UserDN.Current = AuthLogic.Login(username, passwordHash);
+                UserEntity.Current = AuthLogic.Login(username, passwordHash);
             });
         }
 
-        public virtual void ChagePassword(Lite<UserDN> user, string passwordHash, string newPasswordHash)
+        public virtual void ChagePassword(Lite<UserEntity> user, byte[] passwordHash, byte[] newPasswordHash)
         {
             Execute(MethodInfo.GetCurrentMethod(), () =>
             {
@@ -72,18 +72,18 @@ namespace Signum.Services
         }
 
 
-        public virtual void LoginChagePassword(string username, string passwordHash, string newPasswordHash)
+        public virtual void LoginChagePassword(string username, byte[] passwordHash, byte[] newPasswordHash)
         {
             Execute(MethodInfo.GetCurrentMethod(), null, () =>
             {
-                UserDN.Current = AuthLogic.ChangePasswordLogin(username, passwordHash, newPasswordHash);
+                UserEntity.Current = AuthLogic.ChangePasswordLogin(username, passwordHash, newPasswordHash);
             });
         }
 
-        public UserDN GetCurrentUser()
+        public UserEntity GetCurrentUser()
         {
             return Return(MethodInfo.GetCurrentMethod(),
-              () => UserDN.Current);
+              () => UserEntity.Current);
         }
 
         public string PasswordNearExpired()
@@ -95,7 +95,7 @@ namespace Signum.Services
         #endregion
 
         #region IProcessServer
-        public ProcessDN CreatePackageOperation(IEnumerable<Lite<IIdentifiable>> lites, OperationSymbol operationSymbol, params object[] operationArgs)
+        public ProcessEntity CreatePackageOperation(IEnumerable<Lite<IEntity>> lites, OperationSymbol operationSymbol, params object[] operationArgs)
         {
             return Return(MethodInfo.GetCurrentMethod(), null,
                 () => PackageLogic.CreatePackageOperation(lites, operationSymbol, operationArgs));
@@ -103,19 +103,19 @@ namespace Signum.Services
         #endregion
 
         #region IQueryServer Members
-        public QueryDN GetQuery(object queryName)
+        public QueryEntity GetQuery(object queryName)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-                () => QueryLogic.GetQuery(queryName));
+                () => QueryLogic.GetQueryEntity(queryName));
         }
 
         #endregion
 
         #region IPropertyAuthServer Members
-        public PropertyRulePack GetPropertyRules(Lite<RoleDN> role, TypeDN typeDN)
+        public PropertyRulePack GetPropertyRules(Lite<RoleEntity> role, TypeEntity typeEntity)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-             () => PropertyAuthLogic.GetPropertyRules(role, typeDN));
+             () => PropertyAuthLogic.GetPropertyRules(role, typeEntity));
         }
 
         public void SetPropertyRules(PropertyRulePack rules)
@@ -133,7 +133,7 @@ namespace Signum.Services
 
         #region ITypeAuthServer Members
 
-        public TypeRulePack GetTypesRules(Lite<RoleDN> role)
+        public TypeRulePack GetTypesRules(Lite<RoleEntity> role)
         {
             return Return(MethodInfo.GetCurrentMethod(),
               () => TypeAuthLogic.GetTypeRules(role));
@@ -151,7 +151,7 @@ namespace Signum.Services
               () => TypeAuthLogic.AuthorizedTypes());
         }
 
-        public bool IsAllowedForInUserInterface(Lite<IIdentifiable> lite, TypeAllowedBasic allowed)
+        public bool IsAllowedForInUserInterface(Lite<IEntity> lite, TypeAllowedBasic allowed)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => TypeAuthLogic.IsAllowedFor(lite, allowed, inUserInterface: true));
@@ -178,10 +178,10 @@ namespace Signum.Services
 
         #region IQueryAuthServer Members
 
-        public QueryRulePack GetQueryRules(Lite<RoleDN> role, TypeDN typeDN)
+        public QueryRulePack GetQueryRules(Lite<RoleEntity> role, TypeEntity typeEntity)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-              () => QueryAuthLogic.GetQueryRules(role, typeDN));
+              () => QueryAuthLogic.GetQueryRules(role, typeEntity));
         }
 
         public void SetQueryRules(QueryRulePack rules)
@@ -200,7 +200,7 @@ namespace Signum.Services
 
         #region IPermissionAuthServer Members
 
-        public PermissionRulePack GetPermissionRules(Lite<RoleDN> role)
+        public PermissionRulePack GetPermissionRules(Lite<RoleEntity> role)
         {
             return Return(MethodInfo.GetCurrentMethod(),
             () => PermissionAuthLogic.GetPermissionRules(role));
@@ -221,10 +221,10 @@ namespace Signum.Services
         #endregion
 
         #region IOperationAuthServer Members
-        public OperationRulePack GetOperationRules(Lite<RoleDN> role, TypeDN typeDN)
+        public OperationRulePack GetOperationRules(Lite<RoleEntity> role, TypeEntity typeEntity)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-              () => OperationAuthLogic.GetOperationRules(role, typeDN));
+              () => OperationAuthLogic.GetOperationRules(role, typeEntity));
         }
 
         public void SetOperationRules(OperationRulePack rules)
@@ -247,31 +247,31 @@ namespace Signum.Services
                () => ChartLogic.ExecuteChart(request));
         }
 
-        public List<Lite<UserChartDN>> GetUserCharts(object queryName)
+        public List<Lite<UserChartEntity>> GetUserCharts(object queryName)
         {
             return Return(MethodInfo.GetCurrentMethod(),
             () => UserChartLogic.GetUserCharts(queryName));
         }
 
-        public List<Lite<UserChartDN>> GetUserChartsEntity(Type entityType)
+        public List<Lite<UserChartEntity>> GetUserChartsEntity(Type entityType)
         {
             return Return(MethodInfo.GetCurrentMethod(),
             () => UserChartLogic.GetUserChartsEntity(entityType));
         }
 
-        public List<Lite<UserChartDN>> AutocompleteUserChart(string subString, int limit)
+        public List<Lite<UserChartEntity>> AutocompleteUserChart(string subString, int limit)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => UserChartLogic.Autocomplete(subString, limit));
         }
 
-        public UserChartDN RetrieveUserChart(Lite<UserChartDN> userChart)
+        public UserChartEntity RetrieveUserChart(Lite<UserChartEntity> userChart)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                    () => UserChartLogic.RetrieveUserChart(userChart));
         }
 
-        public List<ChartScriptDN> GetChartScripts()
+        public List<ChartScriptEntity> GetChartScripts()
         {
             return Return(MethodInfo.GetCurrentMethod(),
                     () => ChartScriptLogic.Scripts.Value.Values.ToList());
@@ -280,13 +280,13 @@ namespace Signum.Services
 
         #region IExcelReportServer Members
 
-        public List<Lite<ExcelReportDN>> GetExcelReports(object queryName)
+        public List<Lite<ExcelReportEntity>> GetExcelReports(object queryName)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => ExcelLogic.GetExcelReports(queryName));
         }
 
-        public byte[] ExecuteExcelReport(Lite<ExcelReportDN> excelReport, QueryRequest request)
+        public byte[] ExecuteExcelReport(Lite<ExcelReportEntity> excelReport, QueryRequest request)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => ExcelLogic.ExecuteExcelReport(excelReport, request));
@@ -301,25 +301,25 @@ namespace Signum.Services
         #endregion
 
         #region IUserQueriesServer
-        public List<Lite<UserQueryDN>> GetUserQueries(object queryName)
+        public List<Lite<UserQueryEntity>> GetUserQueries(object queryName)
         {
             return Return(MethodInfo.GetCurrentMethod(),
             () => UserQueryLogic.GetUserQueries(queryName));
         }
 
-        public List<Lite<UserQueryDN>> GetUserQueriesEntity(Type entityType)
+        public List<Lite<UserQueryEntity>> GetUserQueriesEntity(Type entityType)
         {
             return Return(MethodInfo.GetCurrentMethod(),
             () => UserQueryLogic.GetUserQueriesEntity(entityType));
         }
 
-        public List<Lite<UserQueryDN>> AutocompleteUserQueries(string subString, int limit)
+        public List<Lite<UserQueryEntity>> AutocompleteUserQueries(string subString, int limit)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                   () => UserQueryLogic.Autocomplete(subString, limit));
         }
 
-        public UserQueryDN RetrieveUserQuery(Lite<UserQueryDN> userQuery)
+        public UserQueryEntity RetrieveUserQuery(Lite<UserQueryEntity> userQuery)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                  () => UserQueryLogic.RetrieveUserQuery(userQuery));
@@ -327,25 +327,25 @@ namespace Signum.Services
         #endregion
 
         #region SMS Members
-        public string GetPhoneNumber(IdentifiableEntity ie)
+        public string GetPhoneNumber(Entity ie)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => SMSLogic.GetPhoneNumber(ie));
         }
 
-        public List<string> GetLiteralsFromDataObjectProvider(TypeDN type)
+        public List<string> GetLiteralsFromDataObjectProvider(TypeEntity type)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => SMSLogic.GetLiteralsFromDataObjectProvider(type.ToType()));
         }
 
-        public List<Lite<TypeDN>> GetAssociatedTypesForTemplates()
+        public List<Lite<TypeEntity>> GetAssociatedTypesForTemplates()
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => SMSLogic.RegisteredDataObjectProviders());
         }
 
-        public CultureInfoDN GetDefaultCulture()
+        public CultureInfoEntity GetDefaultCulture()
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => SMSLogic.Configuration.DefaultCulture);
@@ -361,37 +361,37 @@ namespace Signum.Services
         #endregion
 
         #region IDashboardServer
-        public DashboardDN GetHomePageDashboard()
+        public DashboardEntity GetHomePageDashboard()
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => DashboardLogic.GetHomePageDashboard());
         }
 
-        public DashboardDN GetEmbeddedDashboard(Type entityType)
+        public DashboardEntity GetEmbeddedDashboard(Type entityType)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => DashboardLogic.GetEmbeddedDashboard(entityType));
         }
 
-        public List<Lite<DashboardDN>> GetDashboardsEntity(Type entityType)
+        public List<Lite<DashboardEntity>> GetDashboardsEntity(Type entityType)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                 () => DashboardLogic.GetDashboardsEntity(entityType));
         }
 
-        public List<Lite<DashboardDN>> AutocompleteDashboard(string subString, int limit)
+        public List<Lite<DashboardEntity>> AutocompleteDashboard(string subString, int limit)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                   () => DashboardLogic.Autocomplete(subString, limit));
         }
 
-        public List<Lite<DashboardDN>> GetDashboards()
+        public List<Lite<DashboardEntity>> GetDashboards()
         {
             return Return(MethodInfo.GetCurrentMethod(),
                   () => DashboardLogic.GetDashboards());
         }
 
-        public DashboardDN RetrieveDashboard(Lite<DashboardDN> dashboard)
+        public DashboardEntity RetrieveDashboard(Lite<DashboardEntity> dashboard)
         {
             return Return(MethodInfo.GetCurrentMethod(),
                    () => DashboardLogic.RetrieveDashboard(dashboard));
@@ -420,18 +420,50 @@ namespace Signum.Services
         #endregion
 
 
-       public MinMax<OperationLogDN> OperationLogNextPrev(OperationLogDN log)
+        public MinMax<OperationLogEntity> OperationLogNextPrev(OperationLogEntity log)
         {
             return Return(MethodInfo.GetCurrentMethod(),
               () => DiffLogLogic.OperationLogNextPrev(log));
         }
 
-         #region IIsolationServer
-        public Lite<IsolationDN> GetOnlyIsolation(List<Lite<IdentifiableEntity>> selectedEntities)
+        #region IIsolationServer
+        public Lite<IsolationEntity> GetOnlyIsolation(List<Lite<Entity>> selectedEntities)
         {
             return Return(MethodInfo.GetCurrentMethod(),
-            () => IsolationLogic.GetOnlyIsolation(selectedEntities));
+                () => IsolationLogic.GetOnlyIsolation(selectedEntities));
         }
+        #endregion
+
+        #region IHelpServer
+        public EntityHelpService GetEntityHelpService(Type type)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+               () => HelpLogic.GetEntityHelpService(type));
+        }
+
+        public bool HasEntityHelpService(Type type)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                () => HelpLogic.GetEntityHelp(type).HasEntity);
+        }
+
+        public QueryHelpService GetQueryHelpService(object queryName)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                () => HelpLogic.GetQueryHelpService(queryName));
+        }
+
+        public bool HasQueryHelpService(object queryName)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                () => HelpLogic.GetQueryHelp(queryName).HasEntity);
+        }
+
+        public Dictionary<PropertyRoute, HelpToolTipInfo> GetPropertyRoutesService(List<PropertyRoute> routes)
+        {
+            return Return(MethodInfo.GetCurrentMethod(),
+                () => HelpLogic.GetPropertyRoutesService(routes));
+        } 
         #endregion
     }
 }

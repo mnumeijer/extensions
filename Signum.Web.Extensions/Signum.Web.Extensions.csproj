@@ -10,7 +10,7 @@
     <ProjectTypeGuids>{349c5851-65df-11da-9384-00065b846f21};{fae04ec0-301f-11d3-bf4b-00c04f79efbc}</ProjectTypeGuids>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Signum.Web.Extensions</RootNamespace>
+    <RootNamespace>Signum.Web</RootNamespace>
     <AssemblyName>Signum.Web.Extensions</AssemblyName>
     <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <SignAssembly>false</SignAssembly>
@@ -52,12 +52,17 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="DocumentFormat.OpenXml, Version=2.5.5631.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <Private>True</Private>
+      <HintPath>..\..\packages\DocumentFormat.OpenXml.2.5\lib\DocumentFormat.OpenXml.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <Private>True</Private>
       <HintPath>..\..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\Framework\Dependencies\Json.Net\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\Newtonsoft.Json.6.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System.Activities" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -111,25 +116,25 @@
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Alert\AlertClient.cs" />
-    <Compile Include="Alert\AlertWidgetHelper.cs" />
-    <Compile Include="Alert\Controllers\AlertController.cs" />
-    <Compile Include="Alert\Views\Alert.generated.cs">
+    <Compile Include="Alerts\AlertClient.cs" />
+    <Compile Include="Alerts\AlertWidgetHelper.cs" />
+    <Compile Include="Alerts\Controllers\AlertController.cs" />
+    <Compile Include="Alerts\Views\Alert.generated.cs">
       <DependentUpon>Alert.cshtml</DependentUpon>
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
     </Compile>
-    <Compile Include="Alert\Views\AlertType.generated.cs">
+    <Compile Include="Alerts\Views\AlertType.generated.cs">
       <DependentUpon>AlertType.cshtml</DependentUpon>
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
     </Compile>
-    <Compile Include="Alert\Views\Web.generated.cs">
+    <Compile Include="Alerts\Views\Web.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Web.config</DependentUpon>
     </Compile>
-    <Compile Include="Alert\Views\_ViewStart.generated.cs">
+    <Compile Include="Alerts\Views\_ViewStart.generated.cs">
       <DependentUpon>_ViewStart.cshtml</DependentUpon>
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -169,8 +174,73 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Types.cshtml</DependentUpon>
     </Compile>
+    <Compile Include="AuthAdmin\Views\User.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>User.cshtml</DependentUpon>
+    </Compile>
     <Compile Include="Auth\UserTicketClient.cs" />
-    <Compile Include="Basic\CultureInfoClient.cs" />
+    <Compile Include="Auth\Views\ChangePassword.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ChangePassword.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\ResetPasswordSend.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ResetPasswordSend.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Cultures\CultureInfoClient.cs" />
+    <Compile Include="Cultures\Views\CultureInfoView.generated.cs">
+      <DependentUpon>CultureInfoView.cshtml</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="Auth\Views\ChangePasswordSuccess.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ChangePasswordSuccess.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\Login.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Login.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\LoginUserControl.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>LoginUserControl.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\Register.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Register.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\ResetPassword.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ResetPassword.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\ResetPasswordSetNew.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ResetPasswordSetNew.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\ResetPasswordSuccess.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>ResetPasswordSuccess.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Auth\Views\SetPassword.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>SetPassword.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Cultures\Views\_ViewStart.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>_ViewStart.cshtml</DependentUpon>
+    </Compile>
     <Compile Include="DiffLog\DiffLogClient.cs" />
     <Compile Include="Dashboard\GridRepeaterHelper.cs" />
     <Compile Include="Dashboard\Views\Admin\DashboardAdmin.generated.cs">
@@ -223,6 +293,22 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>_ViewStart.cshtml</DependentUpon>
     </Compile>
+    <Compile Include="Help\HelpTranslator.cs" />
+    <Compile Include="Files\Views\FilePath.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>FilePath.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Help\Views\MiniMenu.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>MiniMenu.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Help\Views\_ViewStart.generated.cs">
+      <DependentUpon>_ViewStart.cshtml</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
     <Compile Include="Isolation\IsolationClient.cs" />
     <Compile Include="Isolation\IsolationWidgetHelper.cs" />
     <Compile Include="Files\Views\FileRepository.generated.cs">
@@ -236,6 +322,16 @@
       <DependentUpon>_ViewStart.cshtml</DependentUpon>
     </Compile>
     <Compile Include="Dashboard\DashboardOmniboxProvider.cs" />
+    <Compile Include="Isolation\Views\Isolation.generated.cs">
+      <DependentUpon>Isolation.cshtml</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="Isolation\Views\_ViewStart.generated.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>_ViewStart.cshtml</DependentUpon>
+    </Compile>
     <Compile Include="Mailing\Controllers\MailingController.cs" />
     <Compile Include="Mailing\Views\ClientCertificationFile.generated.cs">
       <DependentUpon>ClientCertificationFile.cshtml</DependentUpon>
@@ -335,14 +431,9 @@
     <Compile Include="Translation\TranslationClient.cs" />
     <Compile Include="Translation\ITranslator.cs" />
     <Compile Include="Translation\TranslationSynchronizer.cs" />
-    <Compile Include="Note\Controllers\NoteController.cs" />
+    <Compile Include="Notes\Controllers\NoteController.cs" />
     <Compile Include="AuthAdmin\AuthAdminClient.cs" />
     <Compile Include="AuthAdmin\Controllers\AuthAdminController.cs" />
-    <Compile Include="AuthAdmin\Views\User.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>User.cshtml</DependentUpon>
-    </Compile>
     <Compile Include="AuthAdmin\Views\_ViewStart.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -353,56 +444,6 @@
     <Compile Include="Auth\SessionLogClient.cs" />
     <Compile Include="Auth\UserMapping.cs" />
     <Compile Include="Auth\Controllers\AuthController.cs" />
-    <Compile Include="Auth\Views\ChangePassword.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ChangePassword.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\ChangePasswordSuccess.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ChangePasswordSuccess.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\Login.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Login.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\LoginUserControl.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>LoginUserControl.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\Register.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Register.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\ResetPassword.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ResetPassword.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\ResetPasswordSend.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ResetPasswordSend.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\ResetPasswordSetNew.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ResetPasswordSetNew.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\ResetPasswordSuccess.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ResetPasswordSuccess.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Auth\Views\SetPassword.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>SetPassword.cshtml</DependentUpon>
-    </Compile>
     <Compile Include="Auth\Views\_ViewStart.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -572,49 +613,39 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>DisconnectedMachine.cshtml</DependentUpon>
     </Compile>
-    <Compile Include="Help\Views\EntityProperty.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>EntityProperty.cshtml</DependentUpon>
-    </Compile>
     <Compile Include="Help\Views\Index.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Index.cshtml</DependentUpon>
     </Compile>
-    <Compile Include="Help\Views\Menu.generated.cs">
+    <Compile Include="Help\Views\Buttons.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
-      <DependentUpon>Menu.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Help\Views\NamespaceControl.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>NamespaceControl.cshtml</DependentUpon>
+      <DependentUpon>Buttons.cshtml</DependentUpon>
     </Compile>
     <Compile Include="Help\Views\Search.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Search.cshtml</DependentUpon>
     </Compile>
-    <Compile Include="Note\NoteClient.cs" />
-    <Compile Include="Note\NoteWidgetHelper.cs" />
-    <Compile Include="Note\Views\NoteType.generated.cs">
+    <Compile Include="Notes\NoteClient.cs" />
+    <Compile Include="Notes\NoteWidgetHelper.cs" />
+    <Compile Include="Notes\Views\NoteType.generated.cs">
       <DependentUpon>NoteType.cshtml</DependentUpon>
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
     </Compile>
-    <Compile Include="Note\Views\Note1.generated.cs">
+    <Compile Include="Notes\Views\Note1.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Note.cshtml</DependentUpon>
     </Compile>
-    <Compile Include="Note\Views\Web.generated.cs">
+    <Compile Include="Notes\Views\Web.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Web.config</DependentUpon>
     </Compile>
-    <Compile Include="Note\Views\_ViewStart.generated.cs">
+    <Compile Include="Notes\Views\_ViewStart.generated.cs">
       <DependentUpon>_ViewStart.cshtml</DependentUpon>
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -639,11 +670,6 @@
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>ViewNamespace.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="Help\Views\_ViewStart.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>_ViewStart.cshtml</DependentUpon>
     </Compile>
     <Compile Include="Mailing\Views\EmailMessage.generated.cs">
       <AutoGen>True</AutoGen>
@@ -723,7 +749,6 @@
     <Compile Include="Files\FilesClient.cs" />
     <Compile Include="Help\HelpClient.cs" />
     <Compile Include="Help\Controllers\HelpController.cs" />
-    <Compile Include="Help\HelpModels.cs" />
     <Compile Include="Mailing\MailingClient.cs" />
     <Compile Include="Processes\ProcessesClient.cs" />
     <Compile Include="Processes\Controllers\ProcessController.cs" />
@@ -882,11 +907,6 @@
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
     </Compile>
-    <Compile Include="Basic\Views\CultureInfoView.generated.cs">
-      <DependentUpon>CultureInfoView.cshtml</DependentUpon>
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-    </Compile>
     <Compile Include="Translation\Views\Index.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -970,10 +990,34 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>_ViewStart.cshtml</DependentUpon>
     </Compile>
+    <Compile Include="Word\Controllers\WordController.cs" />
+    <Compile Include="Word\Views\WordTemplate.generated.cs">
+      <DependentUpon>WordTemplate.cshtml</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="Word\Views\_ViewStart.generated.cs">
+      <DependentUpon>_ViewStart.cshtml</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="Word\WordClient.cs" />
   </ItemGroup>
   <ItemGroup>
-    <TypeScriptCompile Include="Alert\Scripts\Alerts.ts" />
-    <EmbeddedResource Include="Alert\Scripts\Alerts.js">
+    <EmbeddedResource Include="Word\Scripts\Word.js">
+      <DependentUpon>Word.ts</DependentUpon>
+    </EmbeddedResource>
+    <Content Include="Word\Views\_ViewStart.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Word\Views\Web.config" />
+    <Content Include="Word\Views\WordTemplate.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>WordTemplate.generated.cs</LastGenOutput>
+    </Content>
+    <TypeScriptCompile Include="Alerts\Scripts\Alerts.ts" />
+    <EmbeddedResource Include="Alerts\Scripts\Alerts.js">
       <DependentUpon>Alerts.ts</DependentUpon>
     </EmbeddedResource>
     <Content Include="AuthAdmin\Content\AuthAdmin.css" />
@@ -995,19 +1039,19 @@
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>PasswordValidInterval.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Alert\Views\_ViewStart.cshtml">
+    <Content Include="Alerts\Views\_ViewStart.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Alert\Views\Alert.cshtml">
+    <Content Include="Alerts\Views\Alert.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>Alert.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Alert\Views\AlertType.cshtml">
+    <Content Include="Alerts\Views\AlertType.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>AlertType.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Alert\Views\Web.config">
+    <Content Include="Alerts\Views\Web.config">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>Web.generated.cs</LastGenOutput>
     </Content>
@@ -1129,13 +1173,14 @@
     <EmbeddedResource Include="Help\Scripts\help.js">
       <DependentUpon>help.ts</DependentUpon>
     </EmbeddedResource>
-    <Content Include="Help\Views\_ViewStart.cshtml">
-      <Generator>RazorGenerator</Generator>
-      <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
-    </Content>
+    <EmbeddedResource Include="Help\Scripts\helpWidget.js">
+      <DependentUpon>helpWidget.ts</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Isolation\Scripts\Isolation.js">
       <DependentUpon>Isolation.ts</DependentUpon>
     </EmbeddedResource>
+    <TypeScriptCompile Include="Help\Scripts\helpWidget.ts" />
+    <Content Include="Help\Content\helpWidget.css" />
     <Content Include="Mailing\Content\Mailing.css" />
     <TypeScriptCompile Include="Mailing\Scripts\Mailing.ts" />
     <TypeScriptCompile Include="Mailing\Scripts\ckeditor.d.ts" />
@@ -1148,8 +1193,8 @@
     </Content>
     <TypeScriptCompile Include="Omnibox\Scripts\Omnibox.ts" />
     <TypeScriptCompile Include="Processes\Scripts\Processes.ts" />
-    <TypeScriptCompile Include="Note\Scripts\Notes.ts" />
-    <EmbeddedResource Include="Note\Scripts\Notes.js">
+    <TypeScriptCompile Include="Notes\Scripts\Notes.ts" />
+    <EmbeddedResource Include="Notes\Scripts\Notes.js">
       <DependentUpon>Notes.ts</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Omnibox\Scripts\Omnibox.js">
@@ -1315,19 +1360,19 @@
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>ChartResultsTable1.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Note\Views\Web.config">
+    <Content Include="Notes\Views\Web.config">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>Web.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Note\Views\_ViewStart.cshtml">
+    <Content Include="Notes\Views\_ViewStart.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Note\Views\Note.cshtml">
+    <Content Include="Notes\Views\Note.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>Note1.generated.cs</LastGenOutput>
     </Content>
-    <Content Include="Note\Views\NoteType.cshtml">
+    <Content Include="Notes\Views\NoteType.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>NoteType.generated.cs</LastGenOutput>
     </Content>
@@ -1398,6 +1443,36 @@
     <Content Include="DiffLog\Views\Web.config" />
     <Content Include="packages.config" />
     <Content Include="Calendar\Views\Web.config" />
+    <Content Include="Help\Views\_ViewStart.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Help\Views\MiniMenu.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>MiniMenu.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Cultures\Views\CultureInfoView.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>CultureInfoView.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Cultures\Views\Web.config" />
+    <Content Include="Cultures\Views\_ViewStart.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Isolation\Views\_ViewStart.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Isolation\Views\Isolation.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>Isolation.generated.cs</LastGenOutput>
+    </Content>
+    <Content Include="Isolation\Views\Web.config" />
+    <Content Include="Files\Views\FilePath.cshtml">
+      <Generator>RazorGenerator</Generator>
+      <LastGenOutput>FilePath.generated.cs</LastGenOutput>
+    </Content>
     <None Include="Profiler\Views\Times.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>Times.generated.cs</LastGenOutput>
@@ -1499,6 +1574,7 @@
     <Content Include="UserQueries\Views\Web.config" />
     <Content Include="Excel\Views\Web.config" />
     <Content Include="Scheduler\Views\Web.config" />
+    <TypeScriptCompile Include="Word\Scripts\Word.ts" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="AuthAdmin\Views\Web.config" />
@@ -1571,21 +1647,13 @@
     <Content Include="Help\Images\icon-warning.png" />
     <Content Include="Help\Images\table.gif" />
     <Content Include="Processes\Content\Processes.css" />
-    <None Include="Help\Views\EntityProperty.cshtml">
-      <Generator>RazorGenerator</Generator>
-      <LastGenOutput>EntityProperty.generated.cs</LastGenOutput>
-    </None>
     <None Include="Help\Views\Index.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>Index.generated.cs</LastGenOutput>
     </None>
-    <None Include="Help\Views\Menu.cshtml">
+    <None Include="Help\Views\Buttons.cshtml">
       <Generator>RazorGenerator</Generator>
-      <LastGenOutput>Menu.generated.cs</LastGenOutput>
-    </None>
-    <None Include="Help\Views\NamespaceControl.cshtml">
-      <Generator>RazorGenerator</Generator>
-      <LastGenOutput>NamespaceControl.generated.cs</LastGenOutput>
+      <LastGenOutput>Buttons.generated.cs</LastGenOutput>
     </None>
     <None Include="Help\Views\Search.cshtml">
       <Generator>RazorGenerator</Generator>
@@ -1662,10 +1730,6 @@
     <Content Include="Translation\Views\_ViewStart.cshtml">
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>_ViewStart.generated.cs</LastGenOutput>
-    </Content>
-    <Content Include="Basic\Views\CultureInfoView.cshtml">
-      <Generator>RazorGenerator</Generator>
-      <LastGenOutput>CultureInfoView.generated.cs</LastGenOutput>
     </Content>
     <Content Include="Translation\Views\TranslatorUserCulture.cshtml">
       <Generator>RazorGenerator</Generator>
@@ -1773,12 +1837,12 @@
       <Name>Signum.Entities.Extensions</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup />
   <PropertyGroup>
-    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">12.0</VisualStudioVersion>
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
   </PropertyGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != ''" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v10.0\WebApplications\Microsoft.WebApplication.targets" Condition="false" />
   <Target Name="BeforeBuild">
     <ItemGroup>
@@ -1788,13 +1852,7 @@
   <Target Name="MvcBuildViews" AfterTargets="AfterBuild" Condition="'$(MvcBuildViews)'=='true'">
     <AspNetCompiler VirtualPath="temp" PhysicalPath="$(WebProjectOutputDir)" />
   </Target>
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-    <TypeScriptTarget>ES5</TypeScriptTarget>
-    <TypeScriptRemoveComments>false</TypeScriptRemoveComments>
-    <TypeScriptSourceMap>true</TypeScriptSourceMap>
-    <TypeScriptModuleKind>AMD</TypeScriptModuleKind>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+  <PropertyGroup>
     <TypeScriptTarget>ES5</TypeScriptTarget>
     <TypeScriptRemoveComments>false</TypeScriptRemoveComments>
     <TypeScriptSourceMap>true</TypeScriptSourceMap>

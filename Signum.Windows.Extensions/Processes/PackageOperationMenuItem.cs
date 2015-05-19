@@ -29,6 +29,7 @@ namespace Signum.Windows.Processes
             {
                 Header = coc.OperationSettings.Try(s => s.Text) ?? coc.OperationInfo.OperationSymbol.NiceToString(),
                 Icon = coc.OperationSettings.Try(s => s.Icon.ToSmallImage()),
+                Tag = coc,
             };
 
             if (coc.CanExecute != null)
@@ -51,7 +52,7 @@ namespace Signum.Windows.Processes
                 {
                     if (coc.ConfirmMessage())
                     {
-                        IIdentifiable entity = Server.Return((IProcessServer s) => s.CreatePackageOperation(coc.Entities.ToList(), coc.OperationInfo.OperationSymbol));
+                        IEntity entity = Server.Return((IProcessServer s) => s.CreatePackageOperation(coc.Entities.ToList(), coc.OperationInfo.OperationSymbol));
 
                         Navigator.Navigate(entity);
                     }

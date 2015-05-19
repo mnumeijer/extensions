@@ -1,5 +1,4 @@
-﻿#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -21,7 +20,6 @@ using System.Web;
 using Signum.Utilities.Reflection;
 using Signum.Web.Omnibox;
 using Signum.Web.AuthAdmin;
-#endregion
 
 namespace Signum.Web.Auth
 {
@@ -36,18 +34,18 @@ namespace Signum.Web.Auth
 
         public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Auth/Scripts/Auth");
         
-        public static string LoginView = ViewPrefix.Formato("Login");
-        public static string LoginUserControlView = ViewPrefix.Formato("LoginUserControl");
-        public static string ChangePasswordView = ViewPrefix.Formato("ChangePassword");
-        public static string ChangePasswordSuccessView = ViewPrefix.Formato("ChangePasswordSuccess");
+        public static string LoginView = ViewPrefix.FormatWith("Login");
+        public static string LoginUserControlView = ViewPrefix.FormatWith("LoginUserControl");
+        public static string ChangePasswordView = ViewPrefix.FormatWith("ChangePassword");
+        public static string ChangePasswordSuccessView = ViewPrefix.FormatWith("ChangePasswordSuccess");
 
-        public static string ResetPasswordView = ViewPrefix.Formato("ResetPassword");
-        public static string ResetPasswordSendView = ViewPrefix.Formato("ResetPasswordSend");
-        public static string ResetPasswordSuccessView = ViewPrefix.Formato("ResetPasswordSuccess");
-        public static string ResetPasswordSetNewView = ViewPrefix.Formato("ResetPasswordSetNew");
+        public static string ResetPasswordView = ViewPrefix.FormatWith("ResetPassword");
+        public static string ResetPasswordSendView = ViewPrefix.FormatWith("ResetPasswordSend");
+        public static string ResetPasswordSuccessView = ViewPrefix.FormatWith("ResetPasswordSuccess");
+        public static string ResetPasswordSetNewView = ViewPrefix.FormatWith("ResetPasswordSetNew");
 
     
-        public static string RememberPasswordSuccessView = ViewPrefix.Formato("RememberPasswordSuccess");
+        public static string RememberPasswordSuccessView = ViewPrefix.FormatWith("RememberPasswordSuccess");
 
         public static bool ResetPasswordStarted;
 
@@ -59,25 +57,25 @@ namespace Signum.Web.Auth
 
                 Navigator.RegisterArea(typeof(AuthClient));
 
-                if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(UserDN)))
-                    Navigator.AddSetting(new EntitySettings<UserDN>());
+                if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(UserEntity)))
+                    Navigator.AddSetting(new EntitySettings<UserEntity>());
 
-                if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(RoleDN)))
-                    Navigator.AddSetting(new EntitySettings<RoleDN>());
+                if (!Navigator.Manager.EntitySettings.ContainsKey(typeof(RoleEntity)))
+                    Navigator.AddSetting(new EntitySettings<RoleEntity>());
 
                 if (resetPassword)
-                    Navigator.AddSetting(new EntitySettings<ResetPasswordRequestDN>());
+                    Navigator.AddSetting(new EntitySettings<ResetPasswordRequestEntity>());
 
                 if (passwordExpiration)
                 {
-                    Navigator.AddSetting(new EntitySettings<PasswordExpiresIntervalDN> { PartialViewName = _ => ViewPrefix.Formato("PasswordValidInterval") });
+                    Navigator.AddSetting(new EntitySettings<PasswordExpiresIntervalEntity> { PartialViewName = _ => ViewPrefix.FormatWith("PasswordValidInterval") });
                 }
 
                 Navigator.AddSetting(new EmbeddedEntitySettings<SetPasswordModel>
                 {
-                    PartialViewName = _ => ViewPrefix.Formato("SetPassword"),
+                    PartialViewName = _ => ViewPrefix.FormatWith("SetPassword"),
                     MappingDefault = new EntityMapping<SetPasswordModel>(false)
-                    .SetProperty(a => a.Password, ctx => UserMapping.GetNewPassword(ctx, UserMapping.NewPasswordKey, UserMapping.NewPasswordBisKey))
+                    .SetProperty(a => a.PasswordHash, ctx => UserMapping.GetNewPassword(ctx, UserMapping.NewPasswordKey, UserMapping.NewPasswordBisKey))
                 });
 
                 if (property)
@@ -102,7 +100,7 @@ namespace Signum.Web.Auth
 
                 AuthenticationRequiredAttribute.Authenticate = context =>
                 {
-                    if (UserDN.Current == null)
+                    if (UserEntity.Current == null)
                     {
                         string returnUrl = context.HttpContext.Request.SuggestedReturnUrl().PathAndQuery;
 
@@ -112,12 +110,12 @@ namespace Signum.Web.Auth
                     }
                 };
 
-                Schema.Current.EntityEvents<UserDN>().Saving += AuthClient_Saving;
+                Schema.Current.EntityEvents<UserEntity>().Saving += AuthClient_Saving;
 
                 var defaultException = SignumExceptionHandlerAttribute.OnControllerException;
                 SignumExceptionHandlerAttribute.OnControllerException = ctx =>
                 {
-                    if (ctx.Exception is UnauthorizedAccessException && (UserDN.Current == null || UserDN.Current == AuthLogic.AnonymousUser))
+                    if (ctx.Exception is UnauthorizedAccessException && (UserEntity.Current == null || UserEntity.Current == AuthLogic.AnonymousUser))
                     {
                         string returnUrl = ctx.HttpContext.Request.SuggestedReturnUrl().PathAndQuery;
                         string loginUrl = PublicLoginUrl(returnUrl);
@@ -132,14 +130,14 @@ namespace Signum.Web.Auth
 
                 OperationClient.AddSettings(new List<OperationSettings>
                 {
-                    new EntityOperationSettings<UserDN>(UserOperation.SetPassword) 
+                    new EntityOperationSettings<UserEntity>(UserOperation.SetPassword) 
                     { 
                         Click = ctx => Module["setPassword"](ctx.Options(), 
                             ctx.Url.Action((AuthController c)=>c.SetPasswordModel()),
                             ctx.Url.Action((AuthController c)=>c.SetPasswordOnOk()))
                     },
 
-                    new EntityOperationSettings<UserDN>(UserOperation.SaveNew) 
+                    new EntityOperationSettings<UserEntity>(UserOperation.SaveNew) 
                     { 
                          Click = ctx => Module["saveNew"](ctx.Options(), 
                             ctx.Url.Action((AuthController c)=>c.SaveNewUser()))
@@ -152,10 +150,10 @@ namespace Signum.Web.Auth
 
         static bool manager_IsViewable(Type type, ModifiableEntity entity)
         {
-            if (!typeof(IdentifiableEntity).IsAssignableFrom(type))
+            if (!typeof(Entity).IsAssignableFrom(type))
                 return true;
 
-            var ident = (IdentifiableEntity)entity;
+            var ident = (Entity)entity;
 
             if (ident == null || ident.IsNew)
                 return TypeAuthLogic.GetAllowed(type).MaxUI() >= TypeAllowedBasic.Read;
@@ -165,10 +163,10 @@ namespace Signum.Web.Auth
 
         static bool manager_IsReadOnly(Type type, ModifiableEntity entity)
         {
-            if (!typeof(IdentifiableEntity).IsAssignableFrom(type))
+            if (!typeof(Entity).IsAssignableFrom(type))
                 return false;
 
-            var ident = (IdentifiableEntity)entity;
+            var ident = (Entity)entity;
 
             if (ident == null || ident.IsNew)
                 return TypeAuthLogic.GetAllowed(type).MaxUI() < TypeAllowedBasic.Modify;
@@ -178,7 +176,7 @@ namespace Signum.Web.Auth
 
         static bool manager_IsCreable(Type type)
         {
-            if(!typeof(IdentifiableEntity).IsAssignableFrom(type))
+            if(!typeof(Entity).IsAssignableFrom(type))
                 return true;
 
             return TypeAuthLogic.GetAllowed(type).MaxUI() == TypeAllowedBasic.Create;
@@ -217,11 +215,11 @@ namespace Signum.Web.Auth
                 case PropertyAllowed.Modify: return null;
                 case PropertyAllowed.None:
                 case PropertyAllowed.Read:
-                default: return AuthMessage.NotAuthorizedToChangeProperty0on1.NiceToString().Formato(route.PropertyString(), route.RootType.NiceName());
+                default: return AuthMessage.NotAuthorizedToChangeProperty0on1.NiceToString().FormatWith(route.PropertyString(), route.RootType.NiceName());
             }
         }
 
-        static void TaskAuthorizeProperties(BaseLine bl)
+        static void TaskAuthorizeProperties(LineBase bl)
         {
             if (bl.PropertyRoute.PropertyRouteType == PropertyRouteType.FieldOrProperty)
             {
@@ -239,9 +237,9 @@ namespace Signum.Web.Auth
             }
         }
 
-        static void AuthClient_Saving(UserDN ident)
+        static void AuthClient_Saving(UserEntity ident)
         {
-            if (ident.IsGraphModified && ident.Is(UserDN.Current))
+            if (ident.IsGraphModified && ident.Is(UserEntity.Current))
                 Transaction.PostRealCommit += ud =>
                 {
                      AuthController.UpdateSessionUser();

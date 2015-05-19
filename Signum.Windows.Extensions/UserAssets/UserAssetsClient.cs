@@ -20,12 +20,12 @@ namespace Signum.Windows.UserAssets
     public static class UserAssetsClient
     {
         public static readonly DependencyProperty CurrentEntityProperty =
-            DependencyProperty.RegisterAttached("CurrentEntity", typeof(IdentifiableEntity), typeof(UserAssetsClient), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.Inherits));
-        public static IdentifiableEntity GetCurrentEntity(DependencyObject obj)
+            DependencyProperty.RegisterAttached("CurrentEntity", typeof(Entity), typeof(UserAssetsClient), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.Inherits));
+        public static Entity GetCurrentEntity(DependencyObject obj)
         {
-            return (IdentifiableEntity)obj.GetValue(CurrentEntityProperty);
+            return (Entity)obj.GetValue(CurrentEntityProperty);
         }
-        public static void SetCurrentEntity(DependencyObject obj, IdentifiableEntity value)
+        public static void SetCurrentEntity(DependencyObject obj, Entity value)
         {
             obj.SetValue(CurrentEntityProperty, value);
         }
@@ -57,7 +57,7 @@ namespace Signum.Windows.UserAssets
             }
         }
 
-        public static void RegisterExportAssertLink<T>() where T : IdentifiableEntity, IUserAssetEntity 
+        public static void RegisterExportAssertLink<T>() where T : Entity, IUserAssetEntity 
         {
             LinksClient.RegisterEntityLinks<T>((lite, control)=>new []
             {
@@ -65,7 +65,7 @@ namespace Signum.Windows.UserAssets
                {
                    SaveFileDialog sfd = new SaveFileDialog
                    {
-                       FileName = "{0}{1}.xml".Formato(lite.EntityType.Name, lite.Id),
+                       FileName = "{0}{1}.xml".FormatWith(lite.EntityType.Name, lite.Id),
                        DefaultExt = ".xml",
                        Filter = "UserAssets file (*.xml)|*.xml"
                    };

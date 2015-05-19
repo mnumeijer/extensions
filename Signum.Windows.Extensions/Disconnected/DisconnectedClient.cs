@@ -17,6 +17,7 @@ using Signum.Utilities.DataStructures;
 using Signum.Windows.Operations;
 using Signum.Entities.Disconnected;
 using Signum.Windows.Authorization;
+using Signum.Entities.Reflection;
 
 namespace Signum.Windows.Disconnected
 {
@@ -31,7 +32,7 @@ namespace Signum.Windows.Disconnected
 
         static Dictionary<Type, StrategyPair> strategies;
 
-        public static DisconnectedExportDN LastExport;
+        public static DisconnectedExportEntity LastExport;
      
 
         public static void Start()
@@ -40,27 +41,30 @@ namespace Signum.Windows.Disconnected
             {
                 Navigator.AddSettings(new List<EntitySettings>()
                 {
-                    new EntitySettings<DisconnectedMachineDN> { View = dm => new DisconnectedMachine() },
-                    new EntitySettings<DisconnectedExportDN> { View = dm => new DisconnectedExport() },
-                    new EntitySettings<DisconnectedImportDN> { View = dm => new DisconnectedImport() },
+                    new EntitySettings<DisconnectedMachineEntity> { View = dm => new DisconnectedMachine() },
+                    new EntitySettings<DisconnectedExportEntity> { View = dm => new DisconnectedExport() },
+                    new EntitySettings<DisconnectedImportEntity> { View = dm => new DisconnectedImport() },
                 });
 
                 Server.Connecting += UpdateCache;
                 UpdateCache();
 
-                Navigator.Manager.IsReadOnly += (type, entity) => entity is IdentifiableEntity && !Editable((IdentifiableEntity)entity, type);
-
+                Navigator.Manager.IsReadOnly += (type, entity) => entity is Entity && !Editable((Entity)entity, type);
+                
                 Navigator.Manager.IsCreable += type =>
                 {
-                    if (Server.OfflineMode)
-                        return strategies[type].Upload != Upload.None;
-                    else
+                    if (!type.IsEntity())
                         return true;
+
+                    if (!Server.OfflineMode)
+                        return true;
+
+                    return strategies[type].Upload != Upload.None;
                 }; 
 
-                Lite<DisconnectedMachineDN> current = null; 
+                Lite<DisconnectedMachineEntity> current = null; 
 
-                DisconnectedMachineDN.CurrentVariable.ValueFactory = () =>
+                DisconnectedMachineEntity.CurrentVariable.ValueFactory = () =>
                 {
                     if (current != null)
                         return current;
@@ -68,14 +72,14 @@ namespace Signum.Windows.Disconnected
                     current = Server.Return((IDisconnectedServer s) => s.GetDisconnectedMachine(Environment.MachineName));
 
                     if (current == null)
-                        throw new ApplicationException("No {0} found for '{1}'".Formato(typeof(DisconnectedMachineDN).NiceName(), Environment.MachineName));
+                        throw new ApplicationException("No {0} found for '{1}'".FormatWith(typeof(DisconnectedMachineEntity).NiceName(), Environment.MachineName));
 
                     return current;
                 };
             }
         }
 
-        private static bool Editable(IdentifiableEntity entity, Type type)
+        private static bool Editable(Entity entity, Type type)
         {
             Upload upload = strategies[type].Upload;
 
@@ -87,23 +91,22 @@ namespace Signum.Windows.Disconnected
                 if (entity == null)
                     return true;
 
-                if (entity.IsNew)
+                if (entity.IsNew || entity.Mixin<DisconnectedCreatedMixin>().DisconnectedCreated)
                     return true;
 
                 if (upload == Upload.Subset)
                 {
-                    var dm =  entity.Mixin<DisconnectedMixin>();
+                    var dm =  entity.Mixin<DisconnectedSubsetMixin>();
 
-                    if(dm.DisconnectedMachine != null)
-                        return dm.DisconnectedMachine.Is(DisconnectedMachineDN.Current);
+                    return dm.DisconnectedMachine.Is(DisconnectedMachineEntity.Current);
                 }
 
-                return DisconnectedExportRanges.InModifiableRange(type, entity.Id);
+                return false;
             }
             else
             {
                 if (upload == Upload.Subset && entity != null)
-                    return entity.Mixin<DisconnectedMixin>().DisconnectedMachine == null;
+                    return entity.Mixin<DisconnectedSubsetMixin>().DisconnectedMachine == null;
 
                 return true;
             }

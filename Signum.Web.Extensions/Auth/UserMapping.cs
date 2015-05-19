@@ -1,5 +1,4 @@
-#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,7 +11,6 @@ using Signum.Engine;
 using System.Web.Mvc;
 using Signum.Entities.Authorization;
 using Signum.Services;
-#endregion
 
 namespace Signum.Web.Auth
 {
@@ -23,7 +21,7 @@ namespace Signum.Web.Auth
         public static readonly string NewPasswordBisKey = "NewPasswordBis";
         public static readonly string UserNameKey = "UserName"; 
 
-        public static Mapping<UserDN> ChangePasswordOld = new EntityMapping<UserDN>(false)
+        public static Mapping<UserEntity> ChangePasswordOld = new EntityMapping<UserEntity>(false)
             .SetProperty(u => u.PasswordHash, ctx =>
             {
                 string oldPassword = ctx.Parent.Inputs[OldPasswordKey];
@@ -33,19 +31,19 @@ namespace Signum.Web.Auth
                 return GetNewPassword(ctx, NewPasswordKey, NewPasswordBisKey);
             });
 
-        public static EntityMapping<UserDN> ChangePassword = new EntityMapping<UserDN>(false)
+        public static EntityMapping<UserEntity> ChangePassword = new EntityMapping<UserEntity>(false)
             .SetProperty(u => u.PasswordHash, ctx =>
         {      
             return GetNewPassword(ctx, NewPasswordKey, NewPasswordBisKey);
         });
 
-        public static EntityMapping<UserDN> NewUser = new EntityMapping<UserDN>(true)
+        public static EntityMapping<UserEntity> NewUser = new EntityMapping<UserEntity>(true)
             .SetProperty(u => u.PasswordHash, ctx =>
         {
             return GetNewPassword(ctx, NewPasswordKey, NewPasswordBisKey);
         });
 
-        public static string GetNewPassword(MappingContext<string> ctx, string newPasswordKey, string newPasswordBisKey)
+        public static byte[] GetNewPassword(MappingContext<byte[]> ctx, string newPasswordKey, string newPasswordBisKey)
         {
             string newPassword = ctx.Parent.Inputs[newPasswordKey];
             if (string.IsNullOrEmpty(newPassword))

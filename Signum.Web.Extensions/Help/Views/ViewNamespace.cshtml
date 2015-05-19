@@ -1,40 +1,65 @@
 ﻿@using Signum.Web.Help
 @using Signum.Web.Extensions
 @using Signum.Engine.Help
+@using Signum.Entities.Help
+@using Signum.Engine
+@using Signum.Engine.Basics
 
+@model NamespaceHelp
 @section head
 {
     @Html.ScriptCss("~/help/Content/help.css")
 }
 
 @{ 
-    Html.RenderPartial(HelpClient.Menu);
     NamespaceHelp nh = (NamespaceHelp)Model;
-    ViewBag.Title = nh.Name;
+
+    ViewBag.Title = Model.Title + Model.Before.Try(b => " " + HelpMessage.In0.NiceToString(b));
 }
 
-@using (var f = Html.BeginForm("SaveNamespace", "Help", new { @namespace = nh.Name }, FormMethod.Post, new { id = "form-save" }))
-{
-    <div class="help_left" id="entityName">
-        <h1>@nh.Name</h1>
-        @Html.TextArea("description", nh.Description, 5, 80, new { @class = "editable" })
-        <span class="editor" id="description-editor">
-            @Html.WikiParse(nh.Description, HelpClient.DefaultWikiSettings)
-        </span>
-    </div>
-    <div class="help_right">
-        <div class="sidebar">
-            <h3>
-                Temas relacionados</h3>
-            <ul>
-                @{ List<Type> types = (List<Type>)ViewData["nameSpace"];}
-                @foreach (Type t in types)
+
+
+<div class="row">
+    <div class="col-md-9" id="entityName">
+        @using (TypeContext<NamespaceHelpEntity> nc = new TypeContext<NamespaceHelpEntity>(nh.Entity, null))
+        {
+            using (Html.BeginForm((HelpController hc) => hc.SaveNamespace(), new { id = "form-save" }))
+            {
+            @Html.HiddenRuntimeInfo(nc)
+            @Html.HiddenRuntimeInfo(nc, e => e.Culture)
+            @Html.HiddenLine(nc, e => e.Name)
+                if (!Navigator.IsReadOnly(typeof(NamespaceHelpEntity)))
                 {
-                    <li><a href="@HelpLogic.EntityUrl(t)">@t.NiceName()</a></li>
+                    Html.RenderPartial(HelpClient.Buttons, new ViewDataDictionary
+                    {
+                        { "options",  Database.Query<NamespaceHelpEntity>()
+                        .Where(e => e.Name == nc.Value.Name && e.Culture != nc.Value.Culture)
+                        .Select(e => new { e.Culture })
+                        .ToList()
+                        .Select(e => KVP.Create(e.Culture.ToCultureInfo(), this.Url.Action((HelpController a) => a.TraslateNamespace(e.Culture.Name))))
+                        .ToDictionary() }
+                    });
                 }
-            </ul>
-        </div>
+            <h1>
+                @Html.TextArea(nc.SubContextPrefix(a => a.Title), nh.Title, 1, 80, new { @class = "editable" })
+                <span class="wiki">
+                    @Model.Title
+                </span>
+
+                @if (Model.Before != null)
+                {
+                    <small>@HelpMessage.In0.NiceToString(Model.Before)</small>
+                }
+            </h1>
+            <code class="shortcut">[n:@nh.Namespace]</code>
+            @Html.TextArea(nc.SubContextPrefix(a => a.Description), nh.Description, 5, 80, new { @class = "editable" })
+            <span class="wiki">
+                @Html.WikiParse(nh.Description, HelpWiki.DefaultWikiSettings)
+            </span>
+            }
+        }
     </div>
-    <div class="clearall">
+    <div class="col-md-3">
+        @{ Html.RenderPartial(HelpClient.MiniMenu, new ViewDataDictionary { { "namespace", nh.Namespace } });}
     </div>
-} 
+</div>

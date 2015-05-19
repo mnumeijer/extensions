@@ -36,13 +36,13 @@ namespace Signum.Engine.UserAssets
                 return content.Guid;
             }
 
-            public string TypeToName(Lite<TypeDN> type)
+            public string TypeToName(Lite<TypeEntity> type)
             {
                 return TypeLogic.GetCleanName(TypeLogic.DnToType.GetOrThrow(type.Retrieve()));
             }
 
 
-            public string QueryToName(Lite<QueryDN> query)
+            public string QueryToName(Lite<QueryEntity> query)
             {
                 return query.Retrieve().Key;
             }
@@ -80,9 +80,9 @@ namespace Signum.Engine.UserAssets
                 elements = doc.Element("Entities").Elements().ToDictionary(a => Guid.Parse(a.Attribute("Guid").Value));
             }
 
-            QueryDN IFromXmlContext.GetQuery(string queryKey)
+            QueryEntity IFromXmlContext.GetQuery(string queryKey)
             {
-                return QueryLogic.GetQuery(QueryLogic.ToQueryName(queryKey));
+                return QueryLogic.GetQueryEntity(QueryLogic.ToQueryName(queryKey));
             }
 
             public IUserAssetEntity GetEntity(Guid guid)
@@ -103,7 +103,7 @@ namespace Signum.Engine.UserAssets
                         Type = entity.GetType(),
                         Guid = guid,
                         Action = entity.IsNew ? EntityAction.New :
-                                 GraphExplorer.FromRoot((IdentifiableEntity)entity).Any(a => a.Modified != ModifiedState.Clean) ? EntityAction.Different :
+                                 GraphExplorer.FromRoot((Entity)entity).Any(a => a.Modified != ModifiedState.Clean) ? EntityAction.Different :
                                  EntityAction.Identical,
                     });
 
@@ -111,16 +111,16 @@ namespace Signum.Engine.UserAssets
                 });
             }
 
-            public Lite<TypeDN> NameToType(string cleanName)
+            public Lite<TypeEntity> NameToType(string cleanName)
             {
-                return TypeLogic.TypeToDN.GetOrThrow(TypeLogic.GetType(cleanName)).ToLite();
+                return TypeLogic.TypeToEntity.GetOrThrow(TypeLogic.GetType(cleanName)).ToLite();
             }
 
-            public IPartDN GetPart(IPartDN old, XElement element)
+            public IPartEntity GetPart(IPartEntity old, XElement element)
             {
                 Type type = PartNames.GetOrThrow(element.Name.ToString());
 
-                var part = old != null && old.GetType() == type ? old : (IPartDN)Activator.CreateInstance(type);
+                var part = old != null && old.GetType() == type ? old : (IPartEntity)Activator.CreateInstance(type);
 
                 part.FromXml(element, this);
 
@@ -128,17 +128,17 @@ namespace Signum.Engine.UserAssets
             }
 
 
-            public Lite<TypeDN> GetType(string cleanName)
+            public Lite<TypeEntity> GetType(string cleanName)
             {
-                return TypeLogic.GetType(cleanName).ToTypeDN().ToLite();
+                return TypeLogic.GetType(cleanName).ToTypeEntity().ToLite();
             }
 
-            public ChartScriptDN ChartScript(string chartScriptName)
+            public ChartScriptEntity ChartScript(string chartScriptName)
             {
                 return ChartScriptLogic.GetChartScript(chartScriptName);
             }
 
-            public QueryDescription GetQueryDescription(QueryDN Query)
+            public QueryDescription GetQueryDescription(QueryEntity Query)
             {
                 return DynamicQueryManager.Current.QueryDescription(QueryLogic.QueryNames.GetOrThrow(Query.Key));
             }
@@ -160,7 +160,7 @@ namespace Signum.Engine.UserAssets
         {
             Dictionary<Guid, bool> overrideEntity;
             Dictionary<Guid, IUserAssetEntity> entities = new Dictionary<Guid, IUserAssetEntity>();
-            public List<IPartDN> toRemove = new List<IPartDN>();
+            public List<IPartEntity> toRemove = new List<IPartEntity>();
             public Dictionary<Guid, XElement> elements;
 
             public ImporterContext(XDocument doc, Dictionary<Guid, bool> overrideEntity)
@@ -169,9 +169,9 @@ namespace Signum.Engine.UserAssets
                 elements = doc.Element("Entities").Elements().ToDictionary(a => Guid.Parse(a.Attribute("Guid").Value));
             }
 
-            QueryDN IFromXmlContext.GetQuery(string queryKey)
+            QueryEntity IFromXmlContext.GetQuery(string queryKey)
             {
-                return QueryLogic.GetQuery(QueryLogic.ToQueryName(queryKey));
+                return QueryLogic.GetQueryEntity(QueryLogic.ToQueryName(queryKey));
             }
 
             public IUserAssetEntity GetEntity(Guid guid)
@@ -195,16 +195,16 @@ namespace Signum.Engine.UserAssets
                 });
             }
 
-            public Lite<TypeDN> NameToType(string cleanName)
+            public Lite<TypeEntity> NameToType(string cleanName)
             {
-                return TypeLogic.TypeToDN.GetOrThrow(TypeLogic.GetType(cleanName)).ToLite();
+                return TypeLogic.TypeToEntity.GetOrThrow(TypeLogic.GetType(cleanName)).ToLite();
             }
 
-            public IPartDN GetPart(IPartDN old, XElement element)
+            public IPartEntity GetPart(IPartEntity old, XElement element)
             {
                 Type type = PartNames.GetOrThrow(element.Name.ToString());
 
-                var part = old != null && old.GetType() == type ? old : (IPartDN)Activator.CreateInstance(type);
+                var part = old != null && old.GetType() == type ? old : (IPartEntity)Activator.CreateInstance(type);
 
                 part.FromXml(element, this);
 
@@ -214,17 +214,17 @@ namespace Signum.Engine.UserAssets
                 return part;
             }
 
-            public Lite<TypeDN> GetType(string cleanName)
+            public Lite<TypeEntity> GetType(string cleanName)
             {
-                return TypeLogic.GetType(cleanName).ToTypeDN().ToLite();
+                return TypeLogic.GetType(cleanName).ToTypeEntity().ToLite();
             }
 
-            public ChartScriptDN ChartScript(string chartScriptName)
+            public ChartScriptEntity ChartScript(string chartScriptName)
             {
                 return ChartScriptLogic.GetChartScript(chartScriptName);
             }
 
-            public QueryDescription GetQueryDescription(QueryDN Query)
+            public QueryDescription GetQueryDescription(QueryEntity Query)
             {
                 return DynamicQueryManager.Current.QueryDescription(QueryLogic.QueryNames.GetOrThrow(Query.Key));
             }
@@ -252,8 +252,8 @@ namespace Signum.Engine.UserAssets
         }
 
         static readonly GenericInvoker<Func<Guid, IUserAssetEntity>> giRetrieveOrCreate = new GenericInvoker<Func<Guid, IUserAssetEntity>>(
-            guid => RetrieveOrCreate<UserQueryDN>(guid));
-        static T RetrieveOrCreate<T>(Guid guid) where T : IdentifiableEntity, IUserAssetEntity, new()
+            guid => RetrieveOrCreate<UserQueryEntity>(guid));
+        static T RetrieveOrCreate<T>(Guid guid) where T : Entity, IUserAssetEntity, new()
         {
             var result = Database.Query<T>().SingleOrDefaultEx(a => a.Guid == guid);
 

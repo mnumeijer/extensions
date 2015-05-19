@@ -27,13 +27,13 @@ namespace Signum.Web.Scheduler
         {
             var state = SchedulerLogic.GetSchedulerState();
 
-            return View(SchedulerClient.ViewPrefix.Formato("SchedulerPanel"), state);
+            return View(SchedulerClient.ViewPrefix.FormatWith("SchedulerPanel"), state);
         }
 
         [AcceptVerbs(HttpVerbs.Post)]
         public ActionResult Start()
         {
-            SchedulerPermission.ViewSchedulerPanel.Authorize();
+            SchedulerPermission.ViewSchedulerPanel.AssertAuthorized();
 
             SchedulerLogic.StartScheduledTasks();
 
@@ -45,7 +45,7 @@ namespace Signum.Web.Scheduler
         [AcceptVerbs(HttpVerbs.Post)]
         public ActionResult Stop()
         {
-            SchedulerPermission.ViewSchedulerPanel.Authorize();
+            SchedulerPermission.ViewSchedulerPanel.AssertAuthorized();
 
             SchedulerLogic.StopScheduledTasks();
 

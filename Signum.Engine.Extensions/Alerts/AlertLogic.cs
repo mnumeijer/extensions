@@ -22,14 +22,14 @@ namespace Signum.Engine.Alerts
 {
     public static class AlertLogic
     {
-        static Expression<Func<IdentifiableEntity, IQueryable<AlertDN>>> AlertsExpression =
-            e => Database.Query<AlertDN>().Where(a => a.Target.RefersTo(e));
-        public static IQueryable<AlertDN> Alerts(this IdentifiableEntity e)
+        static Expression<Func<Entity, IQueryable<AlertEntity>>> AlertsExpression =
+            e => Database.Query<AlertEntity>().Where(a => a.Target.RefersTo(e));
+        public static IQueryable<AlertEntity> Alerts(this Entity e)
         {
             return AlertsExpression.Evaluate(e);
         }
 
-        public static HashSet<AlertTypeDN> SystemAlertTypes = new HashSet<AlertTypeDN>();
+        public static HashSet<AlertTypeEntity> SystemAlertTypes = new HashSet<AlertTypeEntity>();
         static bool started = false;
 
         public static void AssertStarted(SchemaBuilder sb)
@@ -37,14 +37,14 @@ namespace Signum.Engine.Alerts
             sb.AssertDefined(ReflectionTools.GetMethodInfo(() => Start(null, null, null)));
         }
 
-        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, Type[] registerExpressionsFor)
+        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, params Type[] registerExpressionsFor)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
-                sb.Include<AlertDN>();
+                sb.Include<AlertEntity>();
 
-                dqm.RegisterQuery(typeof(AlertDN), () =>
-                    from a in Database.Query<AlertDN>()
+                dqm.RegisterQuery(typeof(AlertEntity), () =>
+                    from a in Database.Query<AlertEntity>()
                     select new
                            {
                                Entity = a,
@@ -61,8 +61,8 @@ namespace Signum.Engine.Alerts
 
                 AlertGraph.Register();
 
-                dqm.RegisterQuery(typeof(AlertTypeDN), () =>
-                    from t in Database.Query<AlertTypeDN>()
+                dqm.RegisterQuery(typeof(AlertTypeEntity), () =>
+                    from t in Database.Query<AlertTypeEntity>()
                     select new
                     {
                         Entity = t,
@@ -71,9 +71,9 @@ namespace Signum.Engine.Alerts
                         t.Key,
                     });
 
-                SemiSymbolLogic<AlertTypeDN>.Start(sb, () => SystemAlertTypes);
+                SemiSymbolLogic<AlertTypeEntity>.Start(sb, () => SystemAlertTypes);
 
-                new Graph<AlertTypeDN>.Execute(AlertTypeOperation.Save)
+                new Graph<AlertTypeEntity>.Execute(AlertTypeOperation.Save)
                 {
                     AllowsNew = true,
                     Lite = false,
@@ -82,16 +82,16 @@ namespace Signum.Engine.Alerts
 
                 if (registerExpressionsFor != null)
                 {
-                    var exp = Signum.Utilities.ExpressionTrees.Linq.Expr((IdentifiableEntity ident) => ident.Alerts());
+                    var exp = Signum.Utilities.ExpressionTrees.Linq.Expr((Entity ident) => ident.Alerts());
                     foreach (var type in registerExpressionsFor)
-                        dqm.RegisterExpression(new ExtensionInfo(type, exp, exp.Body.Type, "Alerts", () => typeof(AlertDN).NicePluralName()));
+                        dqm.RegisterExpression(new ExtensionInfo(type, exp, exp.Body.Type, "Alerts", () => typeof(AlertEntity).NicePluralName()));
                 }
 
                 started = true;
             }
         }
 
-        public static void RegisterAlertType(AlertTypeDN alertType)
+        public static void RegisterAlertType(AlertTypeEntity alertType)
         {
             if (!alertType.Key.HasText())
                 throw new InvalidOperationException("alertType must have a key, use MakeSymbol method after the constructor when declaring it");
@@ -99,35 +99,35 @@ namespace Signum.Engine.Alerts
             SystemAlertTypes.Add(alertType);
         }
 
-        public static AlertDN CreateAlert(this IIdentifiable entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null, string title = null)
+        public static AlertEntity CreateAlert(this IEntity entity, string text, AlertTypeEntity alertType, DateTime? alertDate = null, Lite<IUserEntity> user = null, string title = null)
         {
             return CreateAlert(entity.ToLiteFat(), text, alertType, alertDate, user, title);
         }
 
-        public static AlertDN CreateAlert<T>(this Lite<T> entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null, string title = null) where T : class, IIdentifiable
+        public static AlertEntity CreateAlert<T>(this Lite<T> entity, string text, AlertTypeEntity alertType, DateTime? alertDate = null, Lite<IUserEntity> user = null, string title = null) where T : class, IEntity
         {
             if (started == false)
                 return null;
 
-            var result = new AlertDN
+            var result = new AlertEntity
             {
                 AlertDate = alertDate ?? TimeZoneManager.Now,
                 CreatedBy = user ?? UserHolder.Current.ToLite(),
                 Text = text,
                 Title = title,
-                Target = (Lite<IdentifiableEntity>)entity,
+                Target = (Lite<Entity>)entity,
                 AlertType = alertType
             };
 
             return result.Execute(AlertOperation.SaveNew);
         }
 
-        public static AlertDN CreateAlertForceNew(this IIdentifiable entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null)
+        public static AlertEntity CreateAlertForceNew(this IEntity entity, string text, AlertTypeEntity alertType, DateTime? alertDate = null, Lite<IUserEntity> user = null)
         {
             return CreateAlertForceNew(entity.ToLite(), text, alertType, alertDate, user);
         }
 
-        public static AlertDN CreateAlertForceNew<T>(this Lite<T> entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null) where T : class, IIdentifiable
+        public static AlertEntity CreateAlertForceNew<T>(this Lite<T> entity, string text, AlertTypeEntity alertType, DateTime? alertDate = null, Lite<IUserEntity> user = null) where T : class, IEntity
         {
             if (started == false)
                 return null;
@@ -141,16 +141,16 @@ namespace Signum.Engine.Alerts
         }
     }
 
-    public class AlertGraph : Graph<AlertDN, AlertState>
+    public class AlertGraph : Graph<AlertEntity, AlertState>
     {
         public static void Register()
         {
             GetState = a => a.State;
 
-            new ConstructFrom<IdentifiableEntity>(AlertOperation.CreateAlertFromEntity)
+            new ConstructFrom<Entity>(AlertOperation.CreateAlertFromEntity)
             {
                 ToState = AlertState.New,
-                Construct = (a, _) => new AlertDN
+                Construct = (a, _) => new AlertEntity
                 {
                     AlertDate = TimeZoneManager.Now,
                     CreatedBy = UserHolder.Current.ToLite(),
@@ -186,7 +186,7 @@ namespace Signum.Engine.Alerts
                 {
                     a.State = AlertState.Attended;
                     a.AttendedDate = TimeZoneManager.Now;
-                    a.AttendedBy = UserDN.Current.ToLite();
+                    a.AttendedBy = UserEntity.Current.ToLite();
                 }
             }.Register();
 

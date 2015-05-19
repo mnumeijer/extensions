@@ -8,38 +8,10 @@
     <ProjectGuid>{18048DCC-7069-4BC1-8BE0-99010C7D9082}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Signum.Web.Extensions.Selenium</RootNamespace>
+    <RootNamespace>Signum.Web.Selenium</RootNamespace>
     <AssemblyName>Signum.Web.Extensions.Selenium</AssemblyName>
     <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <SccProjectName>
-    </SccProjectName>
-    <SccLocalPath>
-    </SccLocalPath>
-    <SccAuxPath>
-    </SccAuxPath>
-    <SccProvider>
-    </SccProvider>
-    <FileUpgradeFlags>
-    </FileUpgradeFlags>
-    <OldToolsVersion>4.0</OldToolsVersion>
-    <UpgradeBackupLocation />
-    <TargetFrameworkProfile />
-    <PublishUrl>publish\</PublishUrl>
-    <Install>true</Install>
-    <InstallFrom>Disk</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
-    <UpdateMode>Foreground</UpdateMode>
-    <UpdateInterval>7</UpdateInterval>
-    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
-    <UpdatePeriodically>false</UpdatePeriodically>
-    <UpdateRequired>false</UpdateRequired>
-    <MapFileExtensions>true</MapFileExtensions>
-    <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
-    <IsWebBootstrapper>false</IsWebBootstrapper>
-    <UseApplicationTrust>false</UseApplicationTrust>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -63,11 +35,11 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.VisualStudio.QualityTools.UnitTestFramework, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Xml.Linq">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
@@ -76,52 +48,51 @@
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="ThoughtWorks.Selenium.Core, Version=0.0.0.0, Culture=neutral" />
-    <Reference Include="ThoughtWorks.Selenium.IntegrationTests, Version=0.0.0.0, Culture=neutral" />
-    <Reference Include="ThoughtWorks.Selenium.UnitTests, Version=0.0.0.0, Culture=neutral" />
+    <Reference Include="WebDriver">
+      <HintPath>..\..\packages\Selenium.WebDriver.2.44.0\lib\net40\WebDriver.dll</HintPath>
+    </Reference>
+    <Reference Include="WebDriver.Support">
+      <HintPath>..\..\packages\Selenium.Support.2.44.0\lib\net40\WebDriver.Support.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ChartPageProxy.cs" />
-    <Compile Include="EntityButtonContainer.cs" />
-    <Compile Include="LineContainer.cs" />
-    <Compile Include="LineProxies.cs" />
-    <Compile Include="SeleniumExtensions.cs" />
-    <Compile Include="SeleniumTestClass.cs" />
-    <Compile Include="Popup.cs" />
+    <Compile Include="ChartPageProxy.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="EntityButtonContainer.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="LineContainer.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="LineProxies.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Popup.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RuntimeInfoProxy.cs" />
-    <Compile Include="SearchDialogProxy.cs" />
-    <Compile Include="SearchControlExtensions.cs" />
-    <Compile Include="ValidationSummaryContainer.cs" />
-    <Compile Include="WidgetContainer.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Selenium\ThoughtWorks.Selenium.Core.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Selenium\ThoughtWorks.Selenium.IntegrationTests.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Selenium\ThoughtWorks.Selenium.UnitTests.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
-      <Install>false</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
-      <Visible>False</Visible>
-      <ProductName>.NET Framework 3.5 SP1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
-    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
-      <Visible>False</Visible>
-      <ProductName>Windows Installer 3.1</ProductName>
-      <Install>true</Install>
-    </BootstrapperPackage>
+    <Compile Include="RuntimeInfoProxy.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SearchControlExtensions.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SearchDialogProxy.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SeleniumExtensions.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SeleniumTestClass.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="ValidationSummaryContainer.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="WidgetContainer.cs">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Framework\Signum.Engine\Signum.Engine.csproj">
@@ -144,6 +115,9 @@
       <Project>{7d851227-5294-4beb-990e-56b4fbb7a148}</Project>
       <Name>Signum.Entities.Extensions</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

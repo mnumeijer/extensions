@@ -1,4 +1,3 @@
-#region usings
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +15,7 @@ using Signum.Entities.Reflection;
 using Signum.Entities;
 using Signum.Utilities.Reflection;
 using Signum.Entities.Excel;
-#endregion
+using System.Reflection;
 
 namespace Signum.Engine.Excel
 {
@@ -27,7 +26,7 @@ namespace Signum.Engine.Excel
 
         static PlainExcelGenerator()
         {
-            SetTemplate(typeof(PlainExcelGenerator).Assembly.GetManifestResourceStream("Signum.Engine.Extensions.Excel.plainExcelTemplate.xlsx"));
+            SetTemplate(typeof(PlainExcelGenerator).Assembly.GetManifestResourceStream("Signum.Engine.Excel.plainExcelTemplate.xlsx"));
         }
 
         public static void SetTemplate(Stream templateStream)
@@ -145,7 +144,7 @@ namespace Signum.Engine.Excel
                 throw new ApplicationException(ExcelMessage.ThereAreNoResultsToWrite.NiceToString());
             
             var members = MemberEntryFactory.GenerateList<T>(MemberOptions.Fields | MemberOptions.Properties | MemberOptions.Typed | MemberOptions.Getter);
-            var formats = members.ToDictionary(a => a.Name, a => a.MemberInfo.SingleAttribute<FormatAttribute>().Try(f => f.Format));
+            var formats = members.ToDictionary(a => a.Name, a => a.MemberInfo.GetCustomAttribute<FormatAttribute>().Try(f => f.Format));
 
             using (SpreadsheetDocument document = SpreadsheetDocument.Open(stream, true))
             {

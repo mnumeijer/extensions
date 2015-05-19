@@ -148,7 +148,7 @@ namespace Signum.Entities.UserAssets
                 case "!%=": return FilterOperation.NotLike;
             }
 
-            throw new InvalidOperationException("Unexpected Filter {0}".Formato(operationString));
+            throw new InvalidOperationException("Unexpected Filter {0}".FormatWith(operationString));
         }
 
         public const string OperationRegex = @"==?|<=|>=|<|>|\^=|\$=|%=|\*=|\!=|\!\^=|\!\$=|\!%=|\!\*=";
@@ -173,7 +173,7 @@ namespace Signum.Entities.UserAssets
                 case FilterOperation.NotLike: return "!%=";
             }
 
-            throw new InvalidOperationException("Unexpected Filter {0}".Formato(operation));
+            throw new InvalidOperationException("Unexpected Filter {0}".FormatWith(operation));
         }
     }
 
@@ -228,7 +228,7 @@ namespace Signum.Entities.UserAssets
             {
                 result = m.Groups[groupName].Value;
                 if (string.IsNullOrEmpty(result))
-                    return "{0} has no value".Formato(groupName);
+                    return "{0} has no value".FormatWith(groupName);
 
                 if (defaultValue == result)
                     return null;
@@ -242,7 +242,7 @@ namespace Signum.Entities.UserAssets
                     if (minValue <= val && val <= maxValue)
                         return null;
 
-                    return "{0} must be between {1} and {2}".Formato(groupName, minValue, maxValue);
+                    return "{0} must be between {1} and {2}".FormatWith(groupName, minValue, maxValue);
                 }
 
                 if(groupName == "day" && string.Equals(result, "max", StringComparison.InvariantCultureIgnoreCase))
@@ -250,7 +250,7 @@ namespace Signum.Entities.UserAssets
 
                 string options = new[] { defaultValue, "const", "+inc", "-dec", groupName == "day" ? "max" : null }.NotNull().Comma(" or ");
 
-                return "'{0}' is not a valid {1}. Try {2} instead".Formato(result, groupName, options);
+                return "'{0}' is not a valid {1}. Try {2} instead".FormatWith(result, groupName, options);
             }
 
             public DateTime ToDateTime()
@@ -363,7 +363,7 @@ namespace Signum.Entities.UserAssets
 
             public override string ToString()
             {
-                return "{0}/{1}/{2} {3}:{4}:{5}".Formato(Year, Month, Day, Hour, Minute, Second);
+                return "{0}/{1}/{2} {3}:{4}:{5}".FormatWith(Year, Month, Day, Hour, Minute, Second);
             }
         }
 
@@ -409,13 +409,13 @@ namespace Signum.Entities.UserAssets
     {
         public string TryToString(object value, Type type, out string result)
         {
-            if (!(value is Lite<IdentifiableEntity>))
+            if (!(value is Lite<Entity>))
             {
                 result = null;
                 return FilterValueConverter.Continue;
             }
 
-            result = ((Lite<IdentifiableEntity>)value).Key();
+            result = ((Lite<Entity>)value).Key();
             return null;
         }
 
@@ -427,7 +427,7 @@ namespace Signum.Entities.UserAssets
                 return FilterValueConverter.Continue;
             }
 
-            Lite<IdentifiableEntity> lResult;
+            Lite<Entity> lResult;
             string error = Lite.TryParseLite( value, out lResult);
 
             if (error == null)
@@ -447,9 +447,9 @@ namespace Signum.Entities.UserAssets
     {
         public static string CurrentEntityKey = "[CurrentEntity]";
 
-        static readonly ThreadVariable<IdentifiableEntity> currentEntityVariable = Statics.ThreadVariable<IdentifiableEntity>("currentFilterValueEntity");
+        static readonly ThreadVariable<Entity> currentEntityVariable = Statics.ThreadVariable<Entity>("currentFilterValueEntity");
 
-        public static IDisposable SetCurrentEntity(IdentifiableEntity currentEntity)
+        public static IDisposable SetCurrentEntity(Entity currentEntity)
         {
             if (currentEntity == null)
                 throw new InvalidOperationException("currentEntity is null");
@@ -463,7 +463,7 @@ namespace Signum.Entities.UserAssets
 
         public string TryToString(object value, Type type, out string result)
         {
-            var lite = value as Lite<IdentifiableEntity>;
+            var lite = value as Lite<Entity>;
 
             if (lite != null && lite.RefersTo(currentEntityVariable.Value))
             {
@@ -481,7 +481,7 @@ namespace Signum.Entities.UserAssets
             {
                 string after = value.Substring(CurrentEntityKey.Length).Trim();
 
-                string[] parts = after.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
+                string[] parts = after.SplitNoEmpty('.' );
 
                 result = currentEntityVariable.Value;
 
@@ -493,7 +493,7 @@ namespace Signum.Entities.UserAssets
                     var prop = result.GetType().GetProperty(part, BindingFlags.Instance | BindingFlags.Public);
 
                     if (prop == null)
-                        return "Property {0} not found on {1}".Formato(part, type.FullName);
+                        return "Property {0} not found on {1}".FormatWith(part, type.FullName);
 
                     result = prop.GetValue(result, null);
 
@@ -501,8 +501,8 @@ namespace Signum.Entities.UserAssets
                         return null;
                 }
 
-                if (result is IdentifiableEntity)
-                    result = ((IdentifiableEntity)result).ToLite();
+                if (result is Entity)
+                    result = ((Entity)result).ToLite();
 
                 return null;
             }
@@ -518,9 +518,9 @@ namespace Signum.Entities.UserAssets
 
         public string TryToString(object value, Type type, out string result)
         {
-            var lu = value as Lite<UserDN>;
+            var lu = value as Lite<UserEntity>;
 
-            if (lu != null  && lu.EntityType == typeof(UserDN) && lu.IdOrNull == UserDN.Current.Id)
+            if (lu != null  && lu.EntityType == typeof(UserEntity) && lu.IdOrNull == UserEntity.Current.Id)
             {
                 result = CurrentUserKey;
                 return null; 
@@ -535,7 +535,7 @@ namespace Signum.Entities.UserAssets
         {
             if (value == CurrentUserKey)
             {
-                result = UserDN.Current.ToLite();
+                result = UserEntity.Current.ToLite();
                 return null;
             }
 

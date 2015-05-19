@@ -1,5 +1,5 @@
 ﻿@using Signum.Entities.Chart
-@using (var cc = Html.TypeContext<ChartScriptColumnDN>())
+@using (var cc = Html.TypeContext<ChartScriptColumnEntity>())
 {
     @Html.ValueLine(cc, c => c.DisplayName, vl => vl.ValueColumns = new BsColumn(8))
 
@@ -23,9 +23,9 @@
         sc.FormGroupSize = FormGroupSize.Small;
         
         <div class="chart-column-parameters">
-            @Html.EntityLineDetail(cc, c => c.Parameter1)
-            @Html.EntityLineDetail(cc, c => c.Parameter2)
-            @Html.EntityLineDetail(cc, c => c.Parameter3)
+            @Html.EntityDetail(cc, c => c.Parameter1)
+            @Html.EntityDetail(cc, c => c.Parameter2)
+            @Html.EntityDetail(cc, c => c.Parameter3)
         </div>
     }
 }

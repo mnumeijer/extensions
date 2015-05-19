@@ -35,7 +35,7 @@ namespace Signum.Windows.Disconnected
             this.Loaded += new RoutedEventHandler(DownloadDatabase_Loaded);
             this.Closing += new System.ComponentModel.CancelEventHandler(UploadProgress_Closing);
 
-            var a = DisconnectedMachineDN.Current;
+            var a = DisconnectedMachineEntity.Current;
         }
 
         void UploadProgress_Closing(object sender, System.ComponentModel.CancelEventArgs e)
@@ -50,9 +50,9 @@ namespace Signum.Windows.Disconnected
 
         bool Completed = false; 
 
-        DisconnectedImportDN estimation;
+        DisconnectedImportEntity estimation;
 
-        Lite<DisconnectedImportDN> currentLite;
+        Lite<DisconnectedImportEntity> currentLite;
 
         IDisconnectedTransferServer transferServer = DisconnectedClient.GetTransferServer();
 
@@ -60,7 +60,7 @@ namespace Signum.Windows.Disconnected
 
         void DownloadDatabase_Loaded(object sender, RoutedEventArgs e)
         {
-            estimation = Server.Return((IDisconnectedServer ds) => ds.GetUploadEstimation(DisconnectedMachineDN.Current));
+            estimation = Server.Return((IDisconnectedServer ds) => ds.GetUploadEstimation(DisconnectedMachineEntity.Current));
 
             UploadDatabase().ContinueWith(cl =>
             {
@@ -80,18 +80,15 @@ namespace Signum.Windows.Disconnected
             });
         }
 
-        private Task<Lite<DisconnectedImportDN>> UploadDatabase()
+        private Task<Lite<DisconnectedImportEntity>> UploadDatabase()
         {
             FileInfo fi = new FileInfo(DisconnectedClient.UploadBackupFile);
 
             pbUploading.Minimum = 0;
             pbUploading.Maximum = fi.Length;
 
-            var parent = Thread.CurrentThread;
-
             return Task.Factory.StartNew(() =>
             {
-                Thread.CurrentThread.AssignCultures(parent);
                 using (FileStream fs = fi.OpenRead())
                 using (ProgressStream ps = new ProgressStream(fs))
                 {
@@ -102,8 +99,8 @@ namespace Signum.Windows.Disconnected
                         FileName = fi.Name,
                         Length = fi.Length,
                         Stream = ps,
-                        Machine = DisconnectedMachineDN.Current,
-                        User = UserDN.Current.ToLite(),
+                        Machine = DisconnectedMachineEntity.Current,
+                        User = UserEntity.Current.ToLite(),
                     });
 
                     return result.UploadStatistics;

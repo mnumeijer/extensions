@@ -1,5 +1,4 @@
-﻿#region usings
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,260 +19,220 @@ using Signum.Engine.Basics;
 using Signum.Engine;
 using Signum.Engine.WikiMarkup;
 using Signum.Entities.Basics;
-#endregion
+using Signum.Web.Omnibox;
+using Signum.Entities.Omnibox;
+using Signum.Entities.Help;
 
 namespace Signum.Web.Help
 {
     public static class HelpClient
     {
         public static string ViewPrefix = "~/Help/Views/{0}.cshtml";
-        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Help/Scripts/help"); 
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Help/Scripts/help");
+        public static JsModule WidgetModule = new JsModule("Extensions/Signum.Web.Extensions/Help/Scripts/helpWidget");
 
         //pages        
-        public static string IndexUrl =  ViewPrefix.Formato("Index");
-        public static string ViewEntityUrl = ViewPrefix.Formato("ViewEntity");
-        public static string ViewAppendixUrl = ViewPrefix.Formato("ViewAppendix");
-        public static string ViewNamespaceUrl = ViewPrefix.Formato("ViewNamespace");
-        public static string TodoUrl = ViewPrefix.Formato("ViewTodo");
-        public static string SearchResults = ViewPrefix.Formato("Search");
+        public static string IndexUrl = ViewPrefix.FormatWith("Index");
+        public static string ViewEntityUrl = ViewPrefix.FormatWith("ViewEntity");
+        public static string ViewAppendixUrl = ViewPrefix.FormatWith("ViewAppendix");
+        public static string ViewNamespaceUrl = ViewPrefix.FormatWith("ViewNamespace");
+        public static string TodoUrl = ViewPrefix.FormatWith("ViewTodo");
+        public static string SearchResults = ViewPrefix.FormatWith("Search");
 
         //controls
-        public static string Menu = ViewPrefix.Formato("Menu");
-        public static string ViewEntityPropertyUrl = ViewPrefix.Formato("EntityProperty");
-        public static string NamespaceControlUrl = ViewPrefix.Formato("NamespaceControl");
+        public static string Buttons = ViewPrefix.FormatWith("Buttons");
+        public static string MiniMenu = ViewPrefix.FormatWith("MiniMenu");
+        public static string ViewEntityPropertyUrl = ViewPrefix.FormatWith("EntityProperty");
+        public static string NamespaceControlUrl = ViewPrefix.FormatWith("NamespaceControl");
 
-        public static void Start(string wikiUrl, string imagesFolder)
+        public static void Start(string imageFolder,string baseUrl)
         {
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
-                WikiUrl = wikiUrl;
-                ImagesFolder = imagesFolder;
+                HelpUrls.BaseUrl = baseUrl;
+                HelpUrls.ImagesFolder = imageFolder;
 
-                Navigator.RegisterArea(typeof(HelpClient)); 
+                Navigator.RegisterArea(typeof(HelpClient));
+
+                Navigator.AddSettings(new List<EntitySettings>
+                {
+                    new EntitySettings<EntityHelpEntity>(),
+                    new EntitySettings<QueryHelpEntity>(),
+                    new EntitySettings<AppendixHelpEntity>(),
+                    new EntitySettings<NamespaceHelpEntity>(),
+                    new EmbeddedEntitySettings<PropertyRouteHelpEntity>(),
+                    new EntitySettings<OperationHelpEntity>(),
+                    new EmbeddedEntitySettings<QueryColumnHelpEntity>(),
+                });
+
+                Navigator.EmbeddedEntitySettings<PropertyRouteHelpEntity>().MappingDefault.AsEntityMapping()
+                    .SetProperty(a => a.Property, ctx =>
+                    {
+                        var type = ctx.FindParent<EntityHelpEntity>().Value.Type.ToType();
+                        return PropertyRoute.Parse(type, ctx.Input).ToPropertyRouteEntity();
+                    });
 
                 RegisterHelpRoutes();
 
-                DefaultWikiSettings = new WikiSettings(true);
-                DefaultWikiSettings.TokenParser += TokenParser;
-                DefaultWikiSettings.TokenParser += s =>
-                {
-                    try
-                    {
-                        WikiLink wl = LinkParser(s);
-                        if (wl != null) 
-                            return wl.ToHtmlString();
-                    }
-                    catch (Exception)
-                    {
-                        return new WikiLink("#", s, "unavailable").ToHtmlString();
-                    }
-                    return null;
-                };
+                Common.CommonTask += Common_CommonTask;
 
-                DefaultWikiSettings.TokenParser += ProcessImages;
+                WidgetsHelper.GetWidget += WidgetsHelper_GetWidget;
 
-                NoLinkWikiSettings = new WikiSettings(false) { LineBreaks = false };
-                NoLinkWikiSettings.TokenParser += TokenParser;
-                NoLinkWikiSettings.TokenParser += s =>
-                {
-                    try
-                    {
-                        WikiLink wl = LinkParser(s);
-                        if (wl != null) return wl.Text;
-                    }
-                    catch (Exception)
-                    {
-                        return new WikiLink("#", s, "unavailable").ToHtmlString();
-                    }
-                    return null;
-                };
-                NoLinkWikiSettings.TokenParser += RemoveImages;
+                ButtonBarQueryHelper.RegisterGlobalButtons(ButtonBarQueryHelper_RegisterGlobalButtons);
             }
         }
+
+        static void Common_CommonTask(LineBase line)
+        {
+            if (line.PropertyRoute != null)
+                line.FormGroupHtmlProps["data-route"] = line.PropertyRoute.ToString();
+        }
+
+        static ToolBarButton[] ButtonBarQueryHelper_RegisterGlobalButtons(QueryButtonContext ctx)
+        {
+            HeloToolBarButton btn = new HeloToolBarButton(ctx.Prefix, "helpButton")
+            {
+                QueryName = ctx.QueryName,
+                Order = 1000,
+            };
+
+            return new ToolBarButton[] { btn };
+        }
+
+        public class HeloToolBarButton : ToolBarButton
+        {
+            public object QueryName;
+            public string Prefix;
+
+            public HeloToolBarButton(string prefix, string idToAppend)
+                : base(prefix, idToAppend)
+            {
+                this.Prefix = prefix;
+            }
+
+            public override MvcHtmlString ToHtml(HtmlHelper helper)
+            {
+                var a = new HtmlTag("button").Id(this.Id)
+                    .Class("btn btn-default btn-help")
+                    .Class(HelpLogic.GetQueryHelp(QueryName).HasEntity ? "hasItems" : null)
+                    .Attr("type", "button")
+                    .SetInnerText("?");
+
+                var query = HelpLogic.GetQueryHelpService(this.QueryName);
+
+                var jsType = new
+                {
+                    QueryName = QueryUtils.GetQueryUniqueKey(query.QueryName),
+                    Info = query.Info,
+                    Columns = query.Columns,
+                };
+
+                var result = new HtmlTag("div").Class("btn-group").InnerHtml(a).ToHtml();
+
+                result = result.Concat(helper.ScriptCss("~/Help/Content/helpWidget.css"));
+                result = result.Concat(MvcHtmlString.Create("<script>$('#" + this.Id + "').on('mouseup', function(event){ if(event.which == 3) return; " +
+                        HelpClient.WidgetModule["searchClick"](JsFunction.This, this.Prefix, jsType, helper.UrlHelper().Action((HelpController c) => c.ComplexColumns())).ToString() +
+                        " })</script>"));
+
+                return result;
+            }
+
+        }
+
+        static IWidget WidgetsHelper_GetWidget(WidgetContext ctx)
+        {
+            if (ctx.Entity is Entity)
+                return new HelpButton { Prefix = ctx.Prefix, RootType = ctx.TypeContext.PropertyRoute.RootType };
+            return null;
+        }
+
+        class HelpButton : IWidget
+        {
+            public string Prefix;
+            public Type RootType;
+
+            public MvcHtmlString ToHtml(HtmlHelper helper)
+            {
+                HtmlStringBuilder sb = new HtmlStringBuilder();
+                using (sb.SurroundLine("li"))
+                {
+                    sb.Add(helper.ScriptCss("~/Help/Content/helpWidget.css"));
+
+                    var id = TypeContextUtilities.Compose(Prefix, "helpButton");
+
+                    sb.Add(new HtmlTag("button").Id(id)
+                        .Class("btn btn-xs btn-help btn-help-widget")
+                        .Class(HelpLogic.GetEntityHelp(RootType).HasEntity ? "hasItems" : null)
+                        .Attr("type", "button")
+                        .SetInnerText("?"));
+
+                    var type = HelpLogic.GetEntityHelpService(this.RootType);
+
+                    var jsType = new
+                    {
+                        Type = TypeLogic.GetCleanName(type.Type),
+                        Info = type.Info,
+                        Operations = type.Operations.ToDictionary(a => a.Key.Key, a => a.Value),
+                        Properties = type.Properties.ToDictionary(a => a.Key.ToString(), a => a.Value),
+                    };
+
+                    sb.Add(MvcHtmlString.Create("<script>$('#" + id + "').on('mouseup', function(event){ if(event.which == 3) return; " +
+                        HelpClient.WidgetModule["entityClick"](JsFunction.This, this.Prefix, jsType, helper.UrlHelper().Action((HelpController c) => c.PropertyRoutes())).ToString() +
+                        " })</script>"));
+                }
+
+                return sb.ToHtml();
+            }
+        }
+
+
 
         private static void RegisterHelpRoutes()
         {
-            RouteTable.Routes.MapRoute(null, "Help/Appendix/{appendix}/Save", new { controller = "Help", action = "SaveAppendix"});
-            RouteTable.Routes.MapRoute(null, "Help/Namespace/{namespace}/Save", new { controller = "Help", action = "SaveNamespace" });
-            RouteTable.Routes.MapRoute(null, "Help/Appendix/{appendix}", new { controller = "Help", action = "ViewAppendix"});
+            RouteTable.Routes.MapRoute(null, "Help/Appendix/{appendix}", new { controller = "Help", action = "ViewAppendix" });
             RouteTable.Routes.MapRoute(null, "Help/Namespace/{namespace}", new { controller = "Help", action = "ViewNamespace" });
-            RouteTable.Routes.MapRoute(null, "Help/ViewTodo", new { controller = "Help", action = "ViewTodo" });
-            RouteTable.Routes.MapRoute(null, "Help/Search", new { controller = "Help", action = "Search" });
-            RouteTable.Routes.MapRoute(null, "Help", new { controller = "Help", action = "Index", });
-            RouteTable.Routes.MapRoute(null, "Help/{entity}/Save", new { controller = "Help", action = "SaveEntity" });
-            RouteTable.Routes.MapRoute(null, "Help/{entity}", new { controller = "Help", action = "ViewEntity", });
+            RouteTable.Routes.MapRoute(null, "Help/Entity/{entity}", new { controller = "Help", action = "ViewEntity", });
         }
+    }
 
-        public static string WikiUrl;
-        public static string ImagesFolder;
 
-        public class WikiLink
+    public class HelpOmniboxProvider : OmniboxClient.OmniboxProvider<HelpModuleOmniboxResult>
+    {
+        public override OmniboxResultGenerator<HelpModuleOmniboxResult> CreateGenerator()
         {
-            public string Text { get; set; }
-            public string Url { get; set; }
-            public string Class { get; set; }
-
-            public WikiLink(string url)
-            {
-                this.Url = url;
-            }
-
-            public WikiLink(string url, string text)
-            {
-                this.Url = url;
-                this.Text = text;
-            }
-
-            public WikiLink(string url, string text, string @class)
-            {
-                this.Url = url;
-                this.Text = text;
-                this.Class = @class;
-            }
-
-            public virtual string ToHtmlString()
-            {
-                return "<a {0} href=\"{1}\">{2}</a>".Formato(
-                    Class.HasText() ? "class=\"" + Class + "\"" : "",
-                    Url,
-                    Text);
-            }
+            return new HelpModuleOmniboxResultGenerator();
         }
 
-        public class MultiWikiLink : WikiLink {
-
-            public MultiWikiLink(string text) : base(null, text)
-            {
-            }
-
-            public List<WikiLink> Links = new List<WikiLink>();
-
-            public override string ToHtmlString()
-            {
-                return "{0} ({1})".Formato(Text, Links.CommaAnd(l=>l.ToHtmlString()));
-            }
-        }
-
-        public static WikiSettings DefaultWikiSettings;
-        public static WikiSettings NoLinkWikiSettings;
-        public static Func<string, string> TokenParser;
-
-        public static WikiLink LinkParser(string content)
+        public override MvcHtmlString RenderHtml(HelpModuleOmniboxResult result)
         {
-            Match m = HelpLogic.HelpLinkRegex.Match(content);
+            MvcHtmlString html = result.KeywordMatch.ToHtml();
 
-            if (m.Success)
-            {
-                string letter = m.Groups["letter"].ToString();
-                string link = m.Groups["link"].ToString();
-                string text = m.Groups["text"].ToString();
+            if (result.SecondMatch != null)
+                html = html.Concat(" {0}".FormatHtml(result.SecondMatch.ToHtml()));
+            else if (result.SearchString.HasText())
+                html = html.Concat(" \"{0}\"".FormatHtml(result.SearchString));
+            else
+                html = html.Concat(this.ColoredSpan(typeof(TypeEntity).NiceName() + "...", "lightgray"));
 
-                switch (letter)
-                {
-                    case WikiFormat.EntityLink:
-                        Type t = TypeLogic.TryGetType(link);
-                        return new WikiLink(
-                            HelpLogic.EntityUrl(t),
-                            text.HasText() ? text : t.NiceName());
+            html = Icon().Concat(html);
 
-                    case WikiFormat.Hyperlink:
-                        return new WikiLink(link, text);
-
-                    case WikiFormat.OperationLink:
-                        OperationSymbol operation = SymbolLogic<OperationSymbol>.TryToSymbol(link);
-
-                        List<Type> types = OperationLogic.FindTypes(operation).Where(TypeLogic.TypeToDN.ContainsKey).ToList();
-                        if (types.Count == 1)
-                        {
-                            return new WikiLink(
-                                HelpLogic.OperationUrl(types[0], operation),
-                                text.HasText() ? text : operation.NiceToString());
-                        }
-                        else
-                        {
-                            return new MultiWikiLink(operation.NiceToString())
-                            {
-                                Links = types.Select(currentType =>
-                                    new WikiLink(
-                                        HelpLogic.OperationUrl(currentType, operation),
-                                        currentType.NiceName(), operation.NiceToString())).ToList()
-                            };
-                        }
-
-                    case WikiFormat.PropertyLink:
-                        PropertyRoute route = PropertyRoute.Parse
-                            (TypeLogic.TryGetType(link.Before('.')),
-                            link.After('.'));
-                        //TODO: NiceToString de la propiedad
-                        return new WikiLink(
-                            HelpLogic.PropertyUrl(route),
-                            route.Properties.ToString(p => p.NiceName(), "-"));
-
-                    case WikiFormat.QueryLink:
-                        object o = QueryLogic.TryToQueryName(link);
-                        if (o as Enum != null)
-                        {
-                            Enum query = (Enum)o;
-                            return new WikiLink(
-                                HelpLogic.QueryUrl(query),
-                                text.HasText() ? text : QueryUtils.GetNiceName(query));
-                        }
-                        else
-                        {
-                            Type query = (Type)o;
-                            return new WikiLink(
-                                HelpLogic.QueryUrl(query),
-                                text.HasText() ? text : QueryUtils.GetNiceName(query));
-                        }
-
-                    case WikiFormat.WikiLink:
-                        return new WikiLink(WikiUrl + link, text.HasText() ? text : link);
-
-                    case WikiFormat.NamespaceLink:
-                        NamespaceHelp nameSpace = HelpLogic.GetNamespace(link);
-                        return new WikiLink(
-                            HelpLogic.BaseUrl + "/Namespace/" + link,
-                            text.HasText() ? text : link,
-                            nameSpace != null ? "" : "unavailable");
-                }
-            }
-            return null;
+            return html;
         }
 
-        static Regex ImageRegex = new Regex(@"^image(?<position>[^\|]+)\|(?<url>[^\|\]]*)(\|(?<footer>.*))?$");
-
-        public static string ProcessImages(string content)
+        public override string GetUrl(HelpModuleOmniboxResult result)
         {
-            Match m = ImageRegex.Match(content);
+            if (result.Type != null)
+                return RouteHelper.New().Action((HelpController c) => c.ViewEntity(Navigator.ResolveWebTypeName(result.Type)));
 
-            if (m.Success)
-            {
-                string position = m.Groups["position"].ToString();
-                string url = m.Groups["url"].ToString();
-                string footer = m.Groups["footer"].ToString();
+            if (result.SearchString != null)
+                return RouteHelper.New().Action((HelpController c) => c.Search(result.SearchString));
 
-                if (footer.HasText())
-                {
-                    //Has footer
-                    return "<div class=\"image{0}\"><img alt=\"{1}\" src=\"{2}{3}\"/><p class=\"imagedescription\">{1}</p></div>".Formato(position, url, ImagesFolder, footer);
-                }
-                else
-                {
-                    return "<div class=\"image{0}\"><img src=\"{1}{2}\"/></div>".Formato(position, ImagesFolder, url);
-                }
-            }
-            return null;
+            return RouteHelper.New().Action((HelpController c) => c.Index());
         }
 
-        public static string RemoveImages(string content)
+        public override MvcHtmlString Icon()
         {
-            Match m = ImageRegex.Match(content);
-
-            if (m.Success)
-            {
-                return "";
-            }
-            return null;
+            return ColoredGlyphicon("glyphicon-book", "DarkViolet");
         }
     }
 }

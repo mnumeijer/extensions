@@ -22,8 +22,8 @@ namespace Signum.Engine.Basics
             get { return queryNamesLazy.Value; } 
         }
 
-        static ResetLazy<Dictionary<object, QueryDN>> queryNameToEntityLazy;
-        public static Dictionary<object, QueryDN> QueryNameToEntity 
+        static ResetLazy<Dictionary<object, QueryEntity>> queryNameToEntityLazy;
+        public static Dictionary<object, QueryEntity> QueryNameToEntity 
         {
             get { return queryNameToEntityLazy.Value; }
         }
@@ -45,27 +45,27 @@ namespace Signum.Engine.Basics
                     queryNameToEntityLazy.Load();
                 };
 
-                sb.Include<QueryDN>();
+                sb.Include<QueryEntity>();
 
                 sb.Schema.Synchronizing += SynchronizeQueries;
                 sb.Schema.Generating += Schema_Generating;
 
-                queryNamesLazy = sb.GlobalLazy(()=>CreateQueryNames(), new InvalidateWith(typeof(QueryDN)));
+                queryNamesLazy = sb.GlobalLazy(()=>CreateQueryNames(), new InvalidateWith(typeof(QueryEntity)));
 
                 queryNameToEntityLazy = sb.GlobalLazy(() => 
                     EnumerableExtensions.JoinStrict(
-                        Database.Query<QueryDN>().ToList(),
+                        Database.Query<QueryEntity>().ToList(),
                         QueryNames,
                         q => q.Key,
                         kvp => kvp.Key,
                         (q, kvp) => KVP.Create(kvp.Value, q),
-                        "caching QueryDN. Consider synchronize").ToDictionary(),
-                    new InvalidateWith(typeof(QueryDN)));
+                        "caching QueryEntity. Consider synchronize").ToDictionary(),
+                    new InvalidateWith(typeof(QueryEntity)));
             }
         }
 
 
-        public static object ToQueryName(this QueryDN query)
+        public static object ToQueryName(this QueryEntity query)
         {
             return QueryNames.GetOrThrow(query.Key, "QueryName with unique name {0} not found");
         }
@@ -85,33 +85,33 @@ namespace Signum.Engine.Basics
             return DynamicQueryManager.Current.GetQueryNames().ToDictionary(qn => QueryUtils.GetQueryUniqueKey(qn), "queryName");
         }
 
-        static IEnumerable<QueryDN> GenerateQueries()
+        static IEnumerable<QueryEntity> GenerateQueries()
         {
             return DynamicQueryManager.Current.GetQueryNames()
-                .Select(qn => new QueryDN
+                .Select(qn => new QueryEntity
                 {
                     Key = QueryUtils.GetQueryUniqueKey(qn),
                     Name = QueryUtils.GetCleanName(qn)
                 });
         }
 
-        public static List<QueryDN> GetTypeQueries(TypeDN typeDN)
+        public static List<QueryEntity> GetTypeQueries(TypeEntity typeEntity)
         {
-            Type type = TypeLogic.GetType(typeDN.CleanName);
+            Type type = TypeLogic.GetType(typeEntity.CleanName);
 
-            return DynamicQueryManager.Current.GetTypeQueries(type).Keys.Select(GetQuery).ToList();
+            return DynamicQueryManager.Current.GetTypeQueries(type).Keys.Select(GetQueryEntity).ToList();
         }
 
 
-        const string QueriesKey = "Queries";
+        public const string QueriesKey = "Queries";
 
         static SqlPreCommand Schema_Generating()
         {
-            Table table = Schema.Current.Table<QueryDN>();
+            Table table = Schema.Current.Table<QueryEntity>();
 
             var should = GenerateQueries();
 
-            return should.Select((q, i) => table.InsertSqlSync(q, suffix: i.ToString())).Combine(Spacing.Simple).ToSimple();
+            return should.Select((q, i) => table.InsertSqlSync(q, suffix: i.ToString())).Combine(Spacing.Simple).PlainSqlCommand();
 
         }
 
@@ -119,26 +119,27 @@ namespace Signum.Engine.Basics
         {
             var should = GenerateQueries();
 
-            var current = Administrator.TryRetrieveAll<QueryDN>(replacements);
+            var current = Administrator.TryRetrieveAll<QueryEntity>(replacements);
 
-            Table table = Schema.Current.Table<QueryDN>();
+            Table table = Schema.Current.Table<QueryEntity>();
 
-            return Synchronizer.SynchronizeScriptReplacing(
-                replacements,
-                QueriesKey,
-                should.ToDictionary(a => a.Key, "query in memory"),
-                current.ToDictionary(a => a.Key, "query in database"),
-                (n, s)=>table.InsertSqlSync(s),
-                (n, c) => table.DeleteSqlSync(c),
-                (fn, s, c) =>
-                {
-                    c.Key = s.Key;
-                    c.Name = s.Name;
-                    return table.UpdateSqlSync(c);
-                }, Spacing.Double);
+            using (replacements.WithReplacedDatabaseName())
+                return Synchronizer.SynchronizeScriptReplacing(
+                    replacements,
+                    QueriesKey,
+                    should.ToDictionary(a => a.Key, "query in memory"),
+                    current.ToDictionary(a => a.Key, "query in database"),
+                    (n, s) => table.InsertSqlSync(s),
+                    (n, c) => table.DeleteSqlSync(c),
+                    (fn, s, c) =>
+                    {
+                        c.Key = s.Key;
+                        c.Name = s.Name;
+                        return table.UpdateSqlSync(c);
+                    }, Spacing.Double);
         }
 
-        public static QueryDN GetQuery(object queryName)
+        public static QueryEntity GetQueryEntity(object queryName)
         {
             return QueryNameToEntity.GetOrThrow(queryName, "QueryName {0} not found on the database"); 
         }

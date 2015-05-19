@@ -16,9 +16,9 @@ namespace Signum.Engine.ViewLog
 {
     public static class ViewLogLogic
     {
-        static Expression<Func<IdentifiableEntity, IQueryable<ViewLogDN>>> ViewLogsExpression =
-            a => Database.Query<ViewLogDN>().Where(log => log.Target.RefersTo(a));
-        public static IQueryable<ViewLogDN> ViewLogs(this IdentifiableEntity a)
+        static Expression<Func<Entity, IQueryable<ViewLogEntity>>> ViewLogsExpression =
+            a => Database.Query<ViewLogEntity>().Where(log => log.Target.RefersTo(a));
+        public static IQueryable<ViewLogEntity> ViewLogs(this Entity a)
         {
             return ViewLogsExpression.Evaluate(a);
         }
@@ -32,10 +32,10 @@ namespace Signum.Engine.ViewLog
             {
                 Started = true;
 
-                sb.Include<ViewLogDN>();
+                sb.Include<ViewLogEntity>();
 
-                dqm.RegisterQuery(typeof(ViewLogDN), () =>
-                    from e in Database.Query<ViewLogDN>()
+                dqm.RegisterQuery(typeof(ViewLogEntity), () =>
+                    from e in Database.Query<ViewLogEntity>()
                     select new
                     {
                         Entity = e,
@@ -50,14 +50,14 @@ namespace Signum.Engine.ViewLog
 
                 Types = types;
 
-                var exp = Signum.Utilities.ExpressionTrees.Linq.Expr((IdentifiableEntity entity)=> entity.ViewLogs());
+                var exp = Signum.Utilities.ExpressionTrees.Linq.Expr((Entity entity)=> entity.ViewLogs());
 
                 foreach (var t in types)
                 {
-                    dqm.RegisterExpression(new ExtensionInfo(t, exp, exp.Body.Type, "ViewLogs", () => typeof(ViewLogDN).NicePluralName()));
+                    dqm.RegisterExpression(new ExtensionInfo(t, exp, exp.Body.Type, "ViewLogs", () => typeof(ViewLogEntity).NicePluralName()));
                 }
 
-                if (types.Contains(typeof(QueryDN)))
+                if (types.Contains(typeof(QueryEntity)))
                 {
                     DynamicQueryManager.Current.QueryExecuted += Current_QueryExecuted;
                 }
@@ -71,25 +71,25 @@ namespace Signum.Engine.ViewLog
             if (type == DynamicQueryManager.ExecuteType.ExecuteQuery ||
                 type == DynamicQueryManager.ExecuteType.ExecuteGroupQuery)
             {
-                return LogView(QueryLogic.GetQuery(queryName).ToLite(), "Query");
+                return LogView(QueryLogic.GetQueryEntity(queryName).ToLite(), "Query");
             }
 
             return null;
         }
 
-        static void ExceptionLogic_DeleteLogs(DateTime limit)
+        static void ExceptionLogic_DeleteLogs(DeleteLogParametersEntity parameters)
         {
-            Database.Query<ViewLogDN>().Where(view => view.StartDate < limit);
+            Database.Query<ViewLogEntity>().Where(view => view.StartDate < parameters.DateLimit).UnsafeDeleteChunks(parameters.ChunkSize, parameters.MaxChunks);
         }
 
-        public static IDisposable LogView(Lite<IIdentifiable> entity, string viewAction)
+        public static IDisposable LogView(Lite<IEntity> entity, string viewAction)
         {
             if (!Started || !Types.Contains(entity.EntityType))
                 return null;
 
-            var viewLog = new ViewLogDN
+            var viewLog = new ViewLogEntity
             {
-                Target = (Lite<IdentifiableEntity>)entity,
+                Target = (Lite<Entity>)entity,
                 User = UserHolder.Current.ToLite(),
                 ViewAction = viewAction,
             };

@@ -14,8 +14,8 @@ using Signum.Engine.DynamicQuery;
 using System.Reflection;
 using Signum.Entities.Authorization;
 using System.Linq.Expressions;
-using Signum.Engine.Exceptions;
 using Signum.Engine.Authorization;
+using Signum.Entities.Basics;
 
 namespace Signum.Engine.Scheduler
 {
@@ -25,9 +25,9 @@ namespace Signum.Engine.Scheduler
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
-                sb.Include<ApplicationEventLogDN>();
-                dqm.RegisterQuery(typeof(ApplicationEventLogDN), () =>
-                   from s in Database.Query<ApplicationEventLogDN>()
+                sb.Include<ApplicationEventLogEntity>();
+                dqm.RegisterQuery(typeof(ApplicationEventLogEntity), () =>
+                   from s in Database.Query<ApplicationEventLogEntity>()
                    select new
                    {
                        Entity = s,
@@ -43,21 +43,21 @@ namespace Signum.Engine.Scheduler
             }
         }
 
-        public static void ExceptionLogic_DeleteLogs(DateTime limite)
+        public static void ExceptionLogic_DeleteLogs(DeleteLogParametersEntity parameters)
         {
-            Database.Query<ApplicationEventLogDN>().Where(a => a.Date < limite).UnsafeDelete();
+            Database.Query<ApplicationEventLogEntity>().Where(a => a.Date < parameters.DateLimit).UnsafeDeleteChunks(parameters.ChunkSize, parameters.MaxChunks);
         }
 
         public static void ApplicationStart()
         {
             using (AuthLogic.Disable())
-                new ApplicationEventLogDN { Date = TimeZoneManager.Now, MachineName = Environment.MachineName, GlobalEvent = TypeEvent.Start }.Save();
+                new ApplicationEventLogEntity { Date = TimeZoneManager.Now, MachineName = Environment.MachineName, GlobalEvent = TypeEvent.Start }.Save();
         }
 
         public static void ApplicationEnd()
         {
             using (AuthLogic.Disable())
-                new ApplicationEventLogDN { Date = TimeZoneManager.Now, MachineName = Environment.MachineName, GlobalEvent = TypeEvent.Stop }.Save();
+                new ApplicationEventLogEntity { Date = TimeZoneManager.Now, MachineName = Environment.MachineName, GlobalEvent = TypeEvent.Stop }.Save();
         }
 
     }
