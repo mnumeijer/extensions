@@ -32,7 +32,7 @@ namespace Signum.Engine.Disconnected
     {
         static object SyncLock = new object();
 
-        class UploadTable
+        public class UploadTable
         {
             public Type Type;
             public Table Table;
@@ -75,7 +75,7 @@ namespace Signum.Engine.Disconnected
             uploadTables = graph.CompilationOrder().Select(t => dic[t]).ToList();
         }
 
-        List<UploadTable> uploadTables;
+        public List<UploadTable> uploadTables;
 
 
         class RunningImports
