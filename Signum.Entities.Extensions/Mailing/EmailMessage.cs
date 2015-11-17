@@ -15,11 +15,12 @@ using System.Net.Mail;
 using System.Linq.Expressions;
 using Signum.Entities.Files;
 using System.Security.Cryptography;
+using Signum.Entities.Scheduler;
 
 namespace Signum.Entities.Mailing
 {
     [Serializable, EntityKind(EntityKind.Main, EntityData.Transactional)]
-    public class EmailMessageEntity : Entity
+    public class EmailMessageEntity : Entity, IProcessLineDataEntity
     {   
         public EmailMessageEntity()
         {
@@ -52,13 +53,6 @@ namespace Signum.Entities.Mailing
             set { Set(ref from, value); }
         }
 
-        Lite<SmtpConfigurationEntity> smtpConfiguration;
-        public Lite<SmtpConfigurationEntity> SmtpConfiguration
-        {
-            get { return smtpConfiguration; }
-            set { Set(ref smtpConfiguration, value); }
-        }
-
         Lite<EmailTemplateEntity> template;
         public Lite<EmailTemplateEntity> Template
         {
@@ -66,11 +60,11 @@ namespace Signum.Entities.Mailing
             set { Set(ref template, value); }
         }
 
-        DateTime creationTime = TimeZoneManager.Now;
-        public DateTime CreationTime
+        DateTime creationDate = TimeZoneManager.Now;
+        public DateTime CreationDate
         {
-            get { return creationTime; }
-            private set { Set(ref creationTime, value); }
+            get { return creationDate; }
+            private set { Set(ref creationDate, value); }
         }
 
         DateTime? sent;
@@ -89,7 +83,7 @@ namespace Signum.Entities.Mailing
 
         [SqlDbType(Size = int.MaxValue)]
         string subject;
-        [StringLengthValidator(AllowNulls = true)]
+        [StringLengthValidator(AllowNulls = true, AllowLeadingSpaces=true, AllowTrailingSpaces=true)]
         public string Subject
         {
             get { return subject; }
@@ -98,7 +92,7 @@ namespace Signum.Entities.Mailing
 
         [SqlDbType(Size = int.MaxValue)]
         string body;
-        [StringLengthValidator(AllowNulls = true)]
+        [StringLengthValidator(AllowNulls = true, MultiLine=true)]
         public string Body
         {
             get { return body; }
@@ -116,7 +110,7 @@ namespace Signum.Entities.Mailing
 
         [NotNullable, SqlDbType(Size = 150)]
         string bodyHash;
-        [StringLengthValidator(AllowNulls = false, Min = 1, Max = 150)]
+        [StringLengthValidator(AllowNulls = true, Min = 1, Max = 150)]
         public string BodyHash
         {
             get { return bodyHash; }
@@ -163,6 +157,20 @@ namespace Signum.Entities.Mailing
         {
             get { return package; }
             set { Set(ref package, value); }
+        }
+
+        Guid? processIdentifier;
+        public Guid? ProcessIdentifier
+        {
+            get { return processIdentifier; }
+            set { Set(ref processIdentifier, value); }
+        }
+
+        int sendRetries;
+        public int SendRetries
+        {
+            get { return sendRetries; }
+            set { Set(ref sendRetries, value); }
         }
 
         [NotNullable]
@@ -212,7 +220,7 @@ namespace Signum.Entities.Mailing
     {
         [NotNullable, SqlDbType(Size = 100), UniqueIndex(AllowMultipleNulls = true)]
         string uniqueId;
-        [StringLengthValidator(AllowNulls = false, Min = 3, Max = 100)]
+        [StringLengthValidator(AllowNulls = false, Min = 1, Max = 100)]
         public string UniqueId
         {
             get { return uniqueId; }
@@ -461,11 +469,16 @@ namespace Signum.Entities.Mailing
 
     public enum EmailMessageState
     {
+        [Ignore]
         Created,
+        Draft,
+        ReadyToSend,
+        RecruitedForSending,
         Sent,
         SentException,
         ReceptionNotified,
-        Received
+        Received,
+        Outdated
     }
 
     public interface IEmailOwnerEntity : IEntity
@@ -509,6 +522,8 @@ namespace Signum.Entities.Mailing
 
     public static class EmailMessageOperation
     {
+        public static readonly ExecuteSymbol<EmailMessageEntity> Save = OperationSymbol.Execute<EmailMessageEntity>();
+        public static readonly ExecuteSymbol<EmailMessageEntity> ReadyToSend = OperationSymbol.Execute<EmailMessageEntity>();
         public static readonly ExecuteSymbol<EmailMessageEntity> Send = OperationSymbol.Execute<EmailMessageEntity>();
         public static readonly ConstructSymbol<EmailMessageEntity>.From<EmailMessageEntity> ReSend = OperationSymbol.Construct<EmailMessageEntity>.From<EmailMessageEntity>();
         public static readonly ConstructSymbol<ProcessEntity>.FromMany<EmailMessageEntity> ReSendEmails = OperationSymbol.Construct<ProcessEntity>.FromMany<EmailMessageEntity>();
@@ -553,6 +568,11 @@ namespace Signum.Entities.Mailing
     public static class EmailFileType
     {
         public static readonly FileTypeSymbol Attachment = new FileTypeSymbol();
+    }
+
+    public static class AsyncEmailSenderPermission
+    {
+        public static readonly PermissionSymbol ViewAsyncEmailSenderPanel = new PermissionSymbol();
     }
 }
 

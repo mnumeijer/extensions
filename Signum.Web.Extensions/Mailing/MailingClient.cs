@@ -28,6 +28,9 @@ using Signum.Web.UserAssets;
 using Signum.Web.Basic;
 using Signum.Entities.Processes;
 using Signum.Web.Cultures;
+using Signum.Web.Templating;
+using Signum.Web.Omnibox;
+using Signum.Engine.Authorization;
 
 namespace Signum.Web.Mailing
 {
@@ -35,6 +38,7 @@ namespace Signum.Web.Mailing
     {
         public static string ViewPrefix = "~/Mailing/Views/{0}.cshtml";
         public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Mailing/Scripts/Mailing");
+        public static JsModule AsyncEmailSenderModule = new JsModule("Extensions/Signum.Web.Extensions/Mailing/Scripts/AsyncEmailSender");
 
         private static QueryTokenEntity ParseQueryToken(string tokenString, string queryRuntimeInfoInput)
         {
@@ -48,7 +52,7 @@ namespace Signum.Web.Mailing
             return new QueryTokenEntity(QueryUtils.Parse(tokenString, qd, SubTokensOptions.CanElement));
         }
 
-        public static void Start(bool newsletter, bool pop3Config)
+        public static void Start(bool smtpConfig, bool newsletter, bool pop3Config)
         {
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
@@ -112,9 +116,6 @@ namespace Signum.Web.Mailing
                                 return ParseQueryToken(tokenStr, ctx.Parent.Parent.Parent.Parent.Inputs[TypeContextUtilities.Compose("Query", EntityBaseKeys.RuntimeInfo)]);
                             })
                     },
-
-                    new EntitySettings<SmtpConfigurationEntity> { PartialViewName = e => ViewPrefix.FormatWith("SmtpConfiguration") },
-                    new EmbeddedEntitySettings<ClientCertificationFileEntity> { PartialViewName = e => ViewPrefix.FormatWith("ClientCertificationFile")},
                 });
 
                 OperationClient.AddSettings(new List<OperationSettings>
@@ -127,6 +128,16 @@ namespace Signum.Web.Mailing
                             ctx.Url.Action((MailingController mc)=>mc.CreateMailFromTemplateAndEntity()))
                     }
                 });
+
+                if (smtpConfig)
+                {
+                    Navigator.AddSettings(new List<EntitySettings>
+                    {
+                        new EntitySettings<SmtpConfigurationEntity> { PartialViewName = e => ViewPrefix.FormatWith("SmtpConfiguration") },
+                        new EmbeddedEntitySettings<SmtpNetworkDeliveryEntity> { PartialViewName = e => ViewPrefix.FormatWith("SmtpNetworkDelivery") },
+                        new EmbeddedEntitySettings<ClientCertificationFileEntity> { PartialViewName = e => ViewPrefix.FormatWith("ClientCertificationFile")},
+                    });
+                }
 
                 if (newsletter)
                 {
@@ -170,15 +181,22 @@ namespace Signum.Web.Mailing
                     .RemoveProperty(a => a.Body)
                     .SetProperty(a => a.Body, ctx =>
                     {
+                        if (!ctx.HasInput)
+                            return ctx.None();
+
                         var email = ((EmailMessageEntity)ctx.Parent.UntypedValue);
 
-                        return SetWebMailBody(ctx.Value, new WebMailOptions
+                        return SetWebMailBody(ctx.Input, new WebMailOptions
                         {
                              Attachments = email.Attachments,
                              UntrustedImage = null,
                              Url = RouteHelper.New(),
                         });
-                    }); 
+                    });
+
+                SpecialOmniboxProvider.Register(new SpecialOmniboxAction("AsyncEmailPanel",
+                    () => AsyncEmailSenderPermission.ViewAsyncEmailSenderPanel.IsAuthorized(),
+                    uh => uh.Action((AsyncEmailSenderController pc) => pc.View())));
             }
         }
 
@@ -187,68 +205,10 @@ namespace Signum.Web.Mailing
             return new QueryTokenBuilderSettings(qd, options)
             {
                 ControllerUrl = RouteHelper.New().Action("NewSubTokensCombo", "Mailing"),
-                Decorators = MailingDecorators,
+                Decorators = TemplatingClient.TemplatingDecorators,
                 RequestExtraJSonData = null,
             };
         }
-
-        static void MailingDecorators(QueryToken qt, HtmlTag option)
-        {
-            string canIf = CanIf(qt);
-            if (canIf.HasText())
-                option.Attr("data-if", canIf);
-
-            string canForeach = CanForeach(qt);
-            if (canForeach.HasText())
-                option.Attr("data-foreach", canForeach);
-
-            string canAny = CanAny(qt);
-            if (canAny.HasText())
-                option.Attr("data-any", canAny);
-        }
-
-        static string CanIf(QueryToken token)
-        {
-            if (token == null)
-                return TemplateTokenMessage.NoColumnSelected.NiceToString();
-
-            if (token.Type != typeof(string) && token.Type != typeof(byte[]) && token.Type.ElementType() != null)
-                return TemplateTokenMessage.YouCannotAddIfBlocksOnCollectionFields.NiceToString();
-
-            if (token.HasAllOrAny())
-                return TemplateTokenMessage.YouCannotAddBlocksWithAllOrAny.NiceToString();
-
-            return null;
-        }
-
-        static string CanForeach(QueryToken token)
-        {
-            if (token == null)
-                return TemplateTokenMessage.NoColumnSelected.NiceToString();
-
-            if (token.Type != typeof(string) && token.Type != typeof(byte[]) && token.Type.ElementType() != null)
-                return TemplateTokenMessage.YouHaveToAddTheElementTokenToUseForeachOnCollectionFields.NiceToString();
-
-            if (token.Key != "Element" || token.Parent == null || token.Parent.Type.ElementType() == null)
-                return TemplateTokenMessage.YouCanOnlyAddForeachBlocksWithCollectionFields.NiceToString();
-
-            if (token.HasAllOrAny())
-                return TemplateTokenMessage.YouCannotAddBlocksWithAllOrAny.NiceToString();
-
-            return null; 
-        }
-
-        static string CanAny(QueryToken token)
-        {
-            if (token == null)
-                return TemplateTokenMessage.NoColumnSelected.NiceToString();
-
-            if (token.HasAllOrAny())
-                return TemplateTokenMessage.YouCannotAddBlocksWithAllOrAny.NiceToString();
-
-            return null;
-        }
-
 
         public static Func<string, WebMailOptions, string> TasksSetWebMailBody; 
         public static string SetWebMailBody(string body, WebMailOptions options)

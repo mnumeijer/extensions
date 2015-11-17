@@ -18,6 +18,7 @@ using Signum.Utilities.ExpressionTrees;
 using System.Data.SqlClient;
 using Signum.Engine.Maps;
 using System.Linq.Expressions;
+using Signum.Entities.Basics;
 
 namespace Signum.Engine.Processes
 {
@@ -166,10 +167,10 @@ namespace Signum.Engine.Processes
                             if (CancelNewProcesses.IsCancellationRequested)
                                 return;
 
-                            using (HeavyProfiler.Log("PWL", ()=> "Process Runner"))
+                            using (HeavyProfiler.Log("PWL", () => "Process Runner"))
                             {
                                 (from p in Database.Query<ProcessEntity>()
-                                 where p.State == ProcessState.Planned && p.PlannedDate <= TimeZoneManager.Now                              
+                                 where p.State == ProcessState.Planned && p.PlannedDate <= TimeZoneManager.Now
                                  select p).SetAsQueued();
 
                                 var list = Database.Query<ProcessEntity>()
@@ -281,6 +282,10 @@ namespace Signum.Engine.Processes
                             }
                         }
                     }
+                    catch (ThreadAbortException)
+                    {
+                        //Ignore
+                    }
                     catch (Exception e)
                     {
                         try
@@ -365,6 +370,8 @@ namespace Signum.Engine.Processes
         internal IProcessAlgorithm Algorithm;
         internal CancellationTokenSource CancelationSource;
 
+        public bool WriteToConsole = false;
+
         public ExecutingProcess(IProcessAlgorithm processAlgorithm, ProcessEntity process)
         {
             this.CancelationSource = new CancellationTokenSource();
@@ -382,12 +389,17 @@ namespace Signum.Engine.Processes
             get { return CancelationSource.Token; }
         }
 
+        public static int DecimalPlaces = 3;
+
         public void ProgressChanged(int position, int count)
         {
             if (position > count)
                 throw new InvalidOperationException("Position ({0}) should not be greater thant count ({1}). Maybe the process is not making progress.".FormatWith(position, count));
 
-            decimal progress = ((decimal)position) / count;
+            decimal progress = Math.Round(((decimal)position) / count, DecimalPlaces);
+
+            if (WriteToConsole)
+                SafeConsole.WriteSameLine("{0:p} [{1}/{2}]".FormatWith(progress, position, count));
 
             ProgressChanged(progress);
         }
@@ -424,7 +436,9 @@ namespace Signum.Engine.Processes
 
         public void Execute()
         {
-            using (ScopeSessionFactory.OverrideSession())
+            var user = ExecutionMode.Global().Using(_ => CurrentExecution.User.Retrieve());
+
+            using (UserHolder.UserSession(user))
             {
                 using (ProcessLogic.OnApplySession(CurrentExecution))
                 {

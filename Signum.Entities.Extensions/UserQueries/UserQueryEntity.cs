@@ -109,7 +109,7 @@ namespace Signum.Entities.UserQueries
         }
 
         int? elementsPerPage;
-        [NumberIsValidator(ComparisonType.GreaterThanOrEqual, 1)]
+        [NumberIsValidator(ComparisonType.GreaterThanOrEqualTo, 1)]
         public int? ElementsPerPage
         {
             get { return elementsPerPage; }
@@ -547,6 +547,7 @@ namespace Signum.Entities.UserQueries
         [Description("{0} is not filterable")]
         _0IsNotFilterable,
         [Description("Use {0} to filter current entity")]
-        Use0ToFilterCurrentEntity
+        Use0ToFilterCurrentEntity,
+        Preview
     }
 }

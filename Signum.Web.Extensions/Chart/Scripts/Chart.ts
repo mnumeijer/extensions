@@ -17,8 +17,9 @@ import d3 = require("d3")
 
 
 export function openChart(prefix: string, url: string) {
-    Finder.getFor(prefix).then(sc=>
-        SF.submit(url, sc.requestDataForSearch(Finder.RequestType.FindOptions)));
+    Finder.getFor(prefix)
+        .then(sc=> sc.requestDataForSearch(Finder.RequestType.FindOptions))
+        .then(data=> SF.submit(url, data));
 }
 
 
@@ -90,7 +91,7 @@ export class ChartBuilder {
         this.container.on("change", ".sf-query-token select", e => {
             var token = $(e.currentTarget);
             var id = token.attr("id");
-            Finder.QueryTokenBuilder.clearChildSubtokenCombos(token, id.before("_ddlTokens_"), parseInt(id.after("_ddlTokens_")));
+            Finder.QueryTokenBuilder.clearChildSubtokenCombos(token);
             this.updateChartBuilder(token.closest("tr").attr("data-token"));
         });
 
@@ -107,8 +108,8 @@ export class ChartBuilder {
             url: this.options.updateChartBuilderUrl,
             data: data,
         }).then((result) => {
-                this.container.html(result);
-            });
+            this.container.html(result);
+        });
     }
 
     requestData(): FormObject {
@@ -160,7 +161,7 @@ export class ChartRequest {
         return Finder.serializeOrders(this.options.orders);
     }
 
-     constructor(options: ChartRequestOptions) {
+    constructor(options: ChartRequestOptions) {
 
         this.options = options;
 
@@ -190,7 +191,7 @@ export class ChartRequest {
 
             this.chartBuilder.fastRedraw = () => this.reDraw();
 
-            $(this.chartControl).on("change", ".sf-chart-redraw-onchange", () => {
+            $(this.chartControl).on("change", ".sf-chart-redraw-onchange",() => {
                 this.reDraw();
             });
 
@@ -244,26 +245,26 @@ export class ChartRequest {
             url: this.options.drawUrl,
             data: $.extend(this.requestData(), { "mode": this.options.mode })
         }).then((result) => {
-                if (typeof result === "object") {
-                    if (typeof result.ModelState != "undefined") {
-                        var modelState = result.ModelState;
-                        Validator.showErrors({}, modelState);
-                        SF.Notify.error(lang.signum.error, 2000);
-                    }
+            if (typeof result === "object") {
+                if (typeof result.ModelState != "undefined") {
+                    var modelState = result.ModelState;
+                    Validator.showErrors({}, modelState);
+                    SF.Notify.error(lang.signum.error, 2000);
                 }
-                else {
-                    Validator.showErrors({}, null);
-                    this.chartControl.find(".sf-search-results-container").html(result);
+            }
+            else {
+                Validator.showErrors({}, null);
+                this.chartControl.find(".sf-search-results-container").html(result);
 
-                    if (this.options.mode == ChartRequestMode.Complete || this.options.mode == ChartRequestMode.Data) {
-                        this.initOrders();
-                    }
-
-                    if (this.options.mode == ChartRequestMode.Complete || this.options.mode == ChartRequestMode.Chart) {
-                        this.reDraw();
-                    }
+                if (this.options.mode == ChartRequestMode.Complete || this.options.mode == ChartRequestMode.Data) {
+                    this.initOrders();
                 }
-            });
+
+                if (this.options.mode == ChartRequestMode.Complete || this.options.mode == ChartRequestMode.Chart) {
+                    this.reDraw();
+                }
+            }
+        });
     }
 
     requestData(): FormObject {
@@ -295,7 +296,7 @@ export class ChartRequest {
         }
 
         chart.select(".sf-chart-error").remove();
-        chart.append('svg:rect').attr('class', 'sf-chart-error').attr("y", (chart.attr("height") / 2) - 10).attr("fill", "#FBEFFB").attr("stroke", "#FAC0DB").attr("width", chart.attr("width") - 1).attr("height", 20);
+        chart.append('svg:rect').attr('class', 'sf-chart-error').attr("y",(chart.attr("height") / 2) - 10).attr("fill", "#FBEFFB").attr("stroke", "#FAC0DB").attr("width", chart.attr("width") - 1).attr("height", 20);
         chart.append('svg:text').attr('class', 'sf-chart-error').attr("y", chart.attr("height") / 2).attr("fill", "red").attr("dy", 5).attr("dx", 4).text(message);
     }
 
@@ -314,19 +315,17 @@ export class ChartRequest {
                 name = name.substring(this.options.prefix.length + 1, name.length);
             }
             var nameParts = name.split('_');
-            if (nameParts.length == 3 && nameParts[0] == "Columns") {
+            if (nameParts.length == 3 && nameParts[0] == "Columns" && nameParts[2] == "DisplayName") {
                 var column = data.columns["c" + nameParts[1]];
 
-                if (!column)
-                    data.columns["c" + nameParts[1]] = column = {}; 
+                if (column)
+                    column.title = $element.val();
 
-                switch (nameParts[2]) {
-                    case "DisplayName": column.title = $element.val(); break;
-                    case "Parameter1": column.parameter1 = $element.val(); break;
-                    case "Parameter2": column.parameter2 = $element.val(); break;
-                    case "Parameter3": column.parameter3 = $element.val(); break;
-                    default: break;
-                }
+            } else if (nameParts.length == 3 && nameParts[0] == "Parameters" && nameParts[2] == "Value") {
+
+                var nameId = $element.attr("id").beforeLast("_Value") + "_Name";
+
+                data.parameters[nameId.get().val()] = $element.val();
             }
         });
 
@@ -352,6 +351,7 @@ export class ChartRequest {
             var matrix = ChartUtils.matrix;
             var scaleFor = ChartUtils.scaleFor;
             var rule = ChartUtils.rule;
+            var ellipsis = ChartUtils.ellipsis;
             __baseLineNumber__ = new Error().lineNumber;
             func = eval(code);
         } catch (e) {
@@ -409,7 +409,7 @@ export class ChartRequest {
     }
 
     bindMouseClick($chartContainer: JQuery) {
-        
+
         $chartContainer.find('[data-click]').click(e=> {
 
             var url = this.options.openUrl;

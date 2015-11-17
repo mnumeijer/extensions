@@ -22,17 +22,21 @@ using Signum.Engine.Templating;
 using Signum.Entities.Files;
 using Signum.Utilities.DataStructures;
 using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Wordprocessing;
+using System.Text.RegularExpressions;
 
 namespace Signum.Engine.Word
 {
     public static class WordTemplateLogic
     {
+        public static bool AvoidSynchronize = false;
+
         public static ResetLazy<Dictionary<Lite<WordTemplateEntity>, WordTemplateEntity>> WordTemplatesLazy;
 
         public static ResetLazy<Dictionary<TypeEntity, List<Lite<WordTemplateEntity>>>> TemplatesByType;
 
-        public static Dictionary<WordTransformerSymbol, Action<WordTemplateEntity, Entity, WordprocessingDocument>> Transformers = new Dictionary<WordTransformerSymbol, Action<WordTemplateEntity, Entity, WordprocessingDocument>>();
-        public static Dictionary<WordConverterSymbol, Func<WordTemplateEntity, Entity, byte[], byte[]>> Converters = new Dictionary<WordConverterSymbol, Func<WordTemplateEntity, Entity, byte[], byte[]>>();
+        public static Dictionary<WordTransformerSymbol, Action<WordContext, WordprocessingDocument>> Transformers = new Dictionary<WordTransformerSymbol, Action<WordContext, WordprocessingDocument>>();
+        public static Dictionary<WordConverterSymbol, Func<WordContext, byte[], byte[]>> Converters = new Dictionary<WordConverterSymbol, Func<WordContext, byte[], byte[]>>();
 
         static Expression<Func<SystemWordTemplateEntity, IQueryable<WordTemplateEntity>>> WordTemplatesExpression =
             e => Database.Query<WordTemplateEntity>().Where(a => a.SystemWordTemplate == e);
@@ -86,6 +90,21 @@ namespace Signum.Engine.Word
                     Execute = (e, _) => { }
                 }.Register();
 
+                new Graph<WordTemplateEntity>.Execute(WordTemplateOperation.CreateWordReport)
+                {
+                    CanExecute = et =>
+                    {
+                        if (et.SystemWordTemplate != null && SystemWordTemplateLogic.RequiresExtraParameters(et.SystemWordTemplate))
+                            return "SystemWordTemplate ({1}) requires extra parameters".FormatWith(et.SystemWordTemplate);
+
+                        return null;
+                    },
+                    Execute = (et, args) =>
+                    {
+                        throw new InvalidOperationException("UI-only operation");
+                    }
+                }.Register();
+
                 TemplatesByType = sb.GlobalLazy(() =>
                 {
                     var list = Database.Query<WordTemplateEntity>().Select(r => KVP.Create(r.Query, r.ToLite())).ToList();
@@ -108,12 +127,19 @@ namespace Signum.Engine.Word
             }
         }
 
-        public static void RegisterTransformer(WordTransformerSymbol transformerSymbol, Action<WordTemplateEntity, Entity, WordprocessingDocument> transformer)
+        public static void RegisterTransformer(WordTransformerSymbol transformerSymbol, Action<WordContext, WordprocessingDocument> transformer)
         {
             Transformers.Add(transformerSymbol, transformer);
         }
 
-        public static void RegisterConverter(WordConverterSymbol converterSymbol, Func<WordTemplateEntity, Entity, byte[], byte[]> converter)
+        public class WordContext
+        {
+            public WordTemplateEntity Template;
+            public Entity Entity;
+            public ISystemWordTemplate SystemWordTemplate;
+        }
+
+        public static void RegisterConverter(WordConverterSymbol converterSymbol, Func<WordContext, byte[], byte[]> converter)
         {
             Converters.Add(converterSymbol, converter);
         }
@@ -186,22 +212,49 @@ namespace Signum.Engine.Word
                          parser.CreateNodes(); Dump(document, "2.BaseNode.txt");
                          parser.AssertClean();
 
+                         if (parser.Errors.Any())
+                             throw new InvalidOperationException("Error in template {0}:\r\n".FormatWith(template) + parser.Errors.ToString(e => e.Message, "\r\n"));
+
                          var renderer = new WordTemplateRenderer(document, qd, entity, template.Culture.ToCultureInfo(), systemWordTemplate);
                          renderer.MakeQuery();
                          renderer.RenderNodes(); Dump(document, "3.Replaced.txt");
                          renderer.AssertClean();
 
+                         FixDocument(document); Dump(document, "4.Fixed.txt");
+
                          if (template.WordTransformer != null)
-                             Transformers.GetOrThrow(template.WordTransformer)(template, entity, document);
+                             Transformers.GetOrThrow(template.WordTransformer)(new WordContext
+                             {
+                                 Template = template,
+                                 Entity = entity,
+                                 SystemWordTemplate = systemWordTemplate
+                             }, document);
                      }
 
                      var array = memory.ToArray();
 
                      if (!avoidConversion && template.WordConverter != null)
-                         array = Converters.GetOrThrow(template.WordConverter)(template, entity, array);
+                         array = Converters.GetOrThrow(template.WordConverter)(new WordContext
+                         {
+                             Template = template,
+                             Entity = entity,
+                             SystemWordTemplate = systemWordTemplate
+                         }, array);
 
                      return array;
                  }
+            }
+        }
+
+        private static void FixDocument(WordprocessingDocument document)
+        {
+            foreach (var root in document.RecursivePartsRootElements())
+            {
+                foreach (var cell in root.Descendants<TableCell>().ToList())
+                {
+                    if (!cell.ChildElements.Any(c => !(c is TableCellProperties)))
+                        cell.AppendChild(new Paragraph());
+                }
             }
         }
 
@@ -223,7 +276,7 @@ namespace Signum.Engine.Word
 
         static SqlPreCommand Schema_Synchronize_Tokens(Replacements replacements)
         {
-            if (!Database.Query<WordTemplateEntity>().Any() || !replacements.Interactive || !SafeConsole.Ask("Synchronize WordTemplates?"))
+            if (AvoidSynchronize)
                 return null;
 
             StringDistance sd = new StringDistance();
@@ -320,6 +373,8 @@ namespace Signum.Engine.Word
                             Schema.Current.Table<WordTemplateEntity>().DeleteSqlSync(template),
                             Schema.Current.Table<FileEntity>().DeleteSqlSync(file));
 
+                    if (ex.Result == FixTokenResult.ReGenerateEntity)
+                        return Regenerate(template, replacements);
 
                     throw new InvalidOperationException("Unexcpected {0}".FormatWith(ex.Result));
                 }
@@ -331,6 +386,26 @@ namespace Signum.Engine.Word
             catch (Exception e)
             {
                 return new SqlPreCommandSimple("-- Exception in {0}: {1}".FormatWith(template.BaseToString(), e.Message));
+            }
+        }
+
+        public static void Regenerate(WordTemplateEntity template)
+        {
+            Regenerate(template, null).ExecuteLeaves();
+        }
+
+        private static SqlPreCommand Regenerate(WordTemplateEntity template, Replacements replacements)
+        {
+            var newTemplate = SystemWordTemplateLogic.CreateDefaultTemplate(template.SystemWordTemplate);
+
+            var file = template.Template.Retrieve();
+
+            using (file.AllowChanges())
+            {
+                file.BinaryFile = newTemplate.Template.Entity.BinaryFile;
+                file.FileName = newTemplate.Template.Entity.FileName;
+
+                return Schema.Current.Table<FileEntity>().UpdateSqlSync(file, comment: "WordTemplate Regenerated: " + template.Name);
             }
         }
 
@@ -354,12 +429,24 @@ namespace Signum.Engine.Word
 
         public static void GenerateDefaultTemplates()
         {
-            var systemEmails = Database.Query<SystemWordTemplateEntity>().Where(se => !se.WordTemplates().Any(a => a.Active)).ToList();
+            var systemWordTemplates = Database.Query<SystemWordTemplateEntity>().Where(se => !se.WordTemplates().Any(a => a.Active)).ToList();
 
-            foreach (var se in systemEmails)
+            List<string> exceptions = new List<string>();
+
+            foreach (var se in systemWordTemplates)
             {
-                SystemWordTemplateLogic.CreateDefaultTemplate(se).Save();
+                try
+                {
+                    SystemWordTemplateLogic.CreateDefaultTemplate(se).Save();
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add("{0} in {1}:\r\n{2}".FormatWith(ex.GetType().Name, se.FullClassName, ex.Message.Indent(4)));
+                }
             }
+
+            if (exceptions.Any())
+                throw new Exception(exceptions.ToString("\r\n\r\n"));
         }
     }
 }

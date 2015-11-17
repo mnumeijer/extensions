@@ -84,7 +84,12 @@ namespace Signum.Engine.Disconnected
             public CancellationTokenSource CancelationSource;
         }
 
-        Dictionary<Lite<DisconnectedImportEntity>, RunningImports> runningExports = new Dictionary<Lite<DisconnectedImportEntity>, RunningImports>();
+        Dictionary<Lite<DisconnectedImportEntity>, RunningImports> runningImports = new Dictionary<Lite<DisconnectedImportEntity>, RunningImports>();
+
+        public bool ImportInProgress
+        {
+            get { return runningImports.Any(); }
+        }
 
         public virtual Lite<DisconnectedImportEntity> BeginImportDatabase(DisconnectedMachineEntity machine, Stream file = null)
         {
@@ -116,7 +121,7 @@ namespace Signum.Engine.Disconnected
             var task = Task.Factory.StartNew(() =>
             {
                 lock (SyncLock)
-                    using (AuthLogic.UserSession(user))
+                    using (UserHolder.UserSession(user))
                     {
                         OnStartImporting(machine);
 
@@ -221,7 +226,7 @@ namespace Signum.Engine.Disconnected
                         }
                         finally
                         {
-                            runningExports.Remove(import);
+                            runningImports.Remove(import);
 
                             DisconnectedMachineEntity.Current = null;
 
@@ -231,7 +236,7 @@ namespace Signum.Engine.Disconnected
             });
 
 
-            runningExports.Add(import, new RunningImports { Task = task, CancelationSource = cancelationSource });
+            runningImports.Add(import, new RunningImports { Task = task, CancelationSource = cancelationSource });
 
             return import;
         }

@@ -68,7 +68,7 @@ namespace Signum.Entities.Mailing
         }
 
         int readTimeout = 60000;
-        [NumberIsValidator(ComparisonType.GreaterThanOrEqual, -1), Unit("ms")]
+        [NumberIsValidator(ComparisonType.GreaterThanOrEqualTo, -1), Unit("ms")]
         public int ReadTimeout
         {
             get { return readTimeout; }
@@ -101,7 +101,7 @@ namespace Signum.Entities.Mailing
     public static class Pop3ConfigurationOperation
     {
         public static readonly ExecuteSymbol<Pop3ConfigurationEntity> Save = OperationSymbol.Execute<Pop3ConfigurationEntity>();
-        public static readonly ExecuteSymbol<Pop3ConfigurationEntity> ReceiveEmails = OperationSymbol.Execute<Pop3ConfigurationEntity>();
+        public static readonly ConstructSymbol<Pop3ReceptionEntity>.From<Pop3ConfigurationEntity> ReceiveEmails = OperationSymbol.Construct<Pop3ReceptionEntity>.From<Pop3ConfigurationEntity>();
     }
 
     public static class Pop3ConfigurationAction

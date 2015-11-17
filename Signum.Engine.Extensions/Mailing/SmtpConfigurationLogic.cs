@@ -19,15 +19,12 @@ namespace Signum.Engine.Mailing
     public static class SmtpConfigurationLogic
     {
         public static ResetLazy<Dictionary<Lite<SmtpConfigurationEntity>, SmtpConfigurationEntity>> SmtpConfigCache;
-        public static Func<SmtpConfigurationEntity> DefaultSmtpConfiguration;
 
-        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, Func<SmtpConfigurationEntity> defaultSmtpConfiguration)
+        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
                 sb.Include<SmtpConfigurationEntity>();
-
-                DefaultSmtpConfiguration = defaultSmtpConfiguration;
 
                 dqm.RegisterQuery(typeof(SmtpConfigurationEntity), () =>
                     from s in Database.Query<SmtpConfigurationEntity>()
@@ -35,13 +32,10 @@ namespace Signum.Engine.Mailing
                     {
                         Entity = s,
                         s.Id,
-                        s.Name,
-                        s.Host,
-                        s.Port,
-                        s.UseDefaultCredentials,
-                        s.Username,
-                        s.Password,
-                        s.EnableSSL
+                        s.DeliveryMethod,
+                        s.Network.Host,
+                        s.Network.Username,
+                        s.PickupDirectoryLocation
                     });
 
                 SmtpConfigCache = sb.GlobalLazy(() => Database.Query<SmtpConfigurationEntity>().ToDictionary(a => a.ToLite()),
@@ -68,20 +62,32 @@ namespace Signum.Engine.Mailing
 
         public static SmtpClient GenerateSmtpClient(this SmtpConfigurationEntity config)
         {
-            SmtpClient client = EmailLogic.SafeSmtpClient(config.Host, config.Port);
-
-            client.UseDefaultCredentials = config.UseDefaultCredentials;
-            client.Credentials = config.Username.HasText() ? new NetworkCredential(config.Username, config.Password) : null;
-            client.EnableSsl = config.EnableSSL;
-
-            foreach (var cc in config.ClientCertificationFiles)
+            if (config.DeliveryMethod != SmtpDeliveryMethod.Network)
             {
-                client.ClientCertificates.Add(cc.CertFileType == CertFileType.CertFile ?
-                    X509Certificate.CreateFromCertFile(cc.FullFilePath)
-                    : X509Certificate.CreateFromSignedFile(cc.FullFilePath));
+                return new SmtpClient
+                {
+                    DeliveryFormat = config.DeliveryFormat,
+                    DeliveryMethod = config.DeliveryMethod,
+                    PickupDirectoryLocation = config.PickupDirectoryLocation,
+                };
             }
+            else
+            {
+                SmtpClient client = EmailLogic.SafeSmtpClient(config.Network.Host, config.Network.Port);
+                client.DeliveryFormat = config.DeliveryFormat;
+                client.UseDefaultCredentials = config.Network.UseDefaultCredentials;
+                client.Credentials = config.Network.Username.HasText() ? new NetworkCredential(config.Network.Username, config.Network.Password) : null;
+                client.EnableSsl = config.Network.EnableSSL;
 
-            return client;
+                foreach (var cc in config.Network.ClientCertificationFiles)
+                {
+                    client.ClientCertificates.Add(cc.CertFileType == CertFileType.CertFile ?
+                        X509Certificate.CreateFromCertFile(cc.FullFilePath)
+                        : X509Certificate.CreateFromSignedFile(cc.FullFilePath));
+                }
+
+                return client;
+            }
         }
     }
 }

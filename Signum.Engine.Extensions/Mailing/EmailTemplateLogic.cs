@@ -22,11 +22,14 @@ using Signum.Engine.Translation;
 using System.Text.RegularExpressions;
 using Signum.Entities.Basics;
 using Signum.Engine.Templating;
+using System.Net.Mail;
 
 namespace Signum.Engine.Mailing
 {
     public static class EmailTemplateLogic
-    {   
+    {
+        public static bool AvoidSynchronize = false;
+
         public static EmailTemplateMessageEntity GetCultureMessage(this EmailTemplateEntity template, CultureInfo ci)
         {
             return template.Messages.SingleOrDefault(tm => tm.CultureInfo.ToCultureInfo() == ci);
@@ -39,13 +42,17 @@ namespace Signum.Engine.Mailing
             return EmailTemplatesExpression.Evaluate(se);
         }
         
-        public static ResetLazy<Dictionary<Lite<EmailTemplateEntity>, EmailTemplateEntity>> EmailTemplatesLazy; 
+        public static ResetLazy<Dictionary<Lite<EmailTemplateEntity>, EmailTemplateEntity>> EmailTemplatesLazy;
 
-        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm)
+        public static Func<EmailTemplateEntity, SmtpConfigurationEntity> GetSmtpConfiguration;
+
+        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, Func<EmailTemplateEntity, SmtpConfigurationEntity> getSmtpConfiguration)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
                 CultureInfoLogic.AssertStarted(sb);
+
+                GetSmtpConfiguration = getSmtpConfiguration;
 
                 sb.Include<EmailTemplateEntity>();       
 
@@ -79,6 +86,7 @@ namespace Signum.Engine.Mailing
 
                 GlobalValueProvider.RegisterGlobalVariable("UrlLeft", _ => EmailLogic.Configuration.UrlLeft);
                 GlobalValueProvider.RegisterGlobalVariable("Now", _ => TimeZoneManager.Now);
+                GlobalValueProvider.RegisterGlobalVariable("Today", _ => TimeZoneManager.Now.Date, "d");
 
                 sb.Schema.Synchronizing += Schema_Synchronize_Tokens;
                 sb.Schema.Synchronizing += Schema_Syncronize_DefaultTemplates;
@@ -216,7 +224,6 @@ namespace Signum.Engine.Mailing
                 {
                     Construct = _ => new EmailTemplateEntity 
                     { 
-                        SmtpConfiguration = SmtpConfigurationLogic.DefaultSmtpConfiguration().ToLite(),
                         MasterTemplate = EmailMasterTemplateLogic.GetDefaultMasterTemplate(),
                     }
                 }.Register();
@@ -246,6 +253,9 @@ namespace Signum.Engine.Mailing
 
         static SqlPreCommand Schema_Synchronize_Tokens(Replacements replacements)
         {
+            if (AvoidSynchronize)
+                return null;
+
             StringDistance sd = new StringDistance();
 
             var emailTemplates = Database.Query<EmailTemplateEntity>().ToList();
@@ -259,6 +269,9 @@ namespace Signum.Engine.Mailing
 
         static SqlPreCommand Schema_Syncronize_DefaultTemplates(Replacements replacements)
         {
+            if (AvoidSynchronize)
+                return null;
+
             var table = Schema.Current.Table(typeof(EmailTemplateEntity));
 
             var systemEmails = Database.Query<SystemEmailEntity>().Where(se => !se.EmailTemplates().Any(a => a.Active)).ToList();
@@ -274,20 +287,19 @@ namespace Signum.Engine.Mailing
             using (replacements.WithReplacedDatabaseName())
             {
                 var cmd = systemEmails.Select(se =>
-                        {
-                            try
-                            {
-                                return table.InsertSqlSync(SystemEmailLogic.CreateDefaultTemplate(se), includeCollections: true);
-                            }
-                            catch (Exception e)
-                            {
-                                return new SqlPreCommandSimple("Exception on SystemEmail {0}: {1}".FormatWith(se, e.Message));
-                            }
-                        })
-                        .Combine(Spacing.Double);
+                {
+                    try
+                    {
+                        return table.InsertSqlSync(SystemEmailLogic.CreateDefaultTemplate(se), includeCollections: true);
+                    }
+                    catch (Exception e)
+                    {
+                        return new SqlPreCommandSimple("Exception on SystemEmail {0}: {1}".FormatWith(se, e.Message));
+                    }
+                }).Combine(Spacing.Double);
 
                 if (cmd != null)
-                    return SqlPreCommand.Combine(Spacing.Double, new SqlPreCommandSimple("DECLARE @idParent INT"), cmd);
+                    return SqlPreCommand.Combine(Spacing.Double, new SqlPreCommandSimple("DECLARE @parentId INT"), cmd);
 
                 return cmd;
             }
@@ -297,10 +309,27 @@ namespace Signum.Engine.Mailing
         {
             var systemEmails = Database.Query<SystemEmailEntity>().Where(se => !se.EmailTemplates().Any(a => a.Active)).ToList();
 
+            List<string> exceptions = new List<string>();
+
             foreach (var se in systemEmails)
             {
-                SystemEmailLogic.CreateDefaultTemplate(se).Save();
+                try
+                {
+                    SystemEmailLogic.CreateDefaultTemplate(se).Save();
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add("{0} in {1}:\r\n{2}".FormatWith(ex.GetType().Name, se.FullClassName, ex.Message.Indent(4)));
+                }
             }
+
+            if (exceptions.Any())
+                throw new Exception(exceptions.ToString("\r\n\r\n"));
+        }
+
+        public static void Regenerate(EmailTemplateEntity et)
+        {
+            EmailTemplateParser.Regenerate(et, null, Schema.Current.Table<EmailTemplateEntity>()).ExecuteLeaves();
         }
     }
 }

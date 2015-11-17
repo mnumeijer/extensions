@@ -80,8 +80,14 @@ namespace Signum.Engine.Templating
 
         protected static bool ToBool(object obj)
         {
-            if (obj == null || obj is bool && ((bool)obj) == false)
+            if (obj == null)
                 return false;
+
+            if (obj is bool)
+                return ((bool)obj);
+
+            if (obj is string)
+                return ((string)obj) != "";
 
             return true;
         }
@@ -315,7 +321,7 @@ namespace Signum.Engine.Templating
             if (entityToken == null)
                 entityToken = QueryUtils.Parse("Entity", DynamicQueryManager.Current.QueryDescription(token.QueryName), 0);
 
-            if (!entityToken.Type.IsAssignableFrom(Route.RootType))
+            if (!entityToken.Type.CleanType().IsAssignableFrom(Route.RootType))
                 addError(false, "The entity of {0} ({1}) is not compatible with the property route {2}".FormatWith(token.FullKey(), entityToken.FullKey(), Route.RootType.NiceName()));
 
             return entityToken;
@@ -397,15 +403,23 @@ namespace Signum.Engine.Templating
                     return result;
                 }
 
-                if(!(vp is TokenValueProvider))
+                var tvp = vp as TokenValueProvider;
+
+                if(tvp == null)
                 {
                     addError(false, "Variable '{0}' is not a token".FormatWith(v));
                     return result;
                 }
 
+                if (tvp.ParsedToken.QueryToken == null)
+                {
+                    addError(false, "Variable '{0}' is not a correctly parsed".FormatWith(v));
+                    return result;
+                }
+
                 var after = tokenString.TryAfter('.');
 
-                tokenString = ((TokenValueProvider)vp).ParsedToken.QueryToken.FullKey() + (after == null ? null : ("." + after));
+                tokenString = tvp.ParsedToken.QueryToken.FullKey() + (after == null ? null : ("." + after));
             }
 
             try
@@ -530,16 +544,18 @@ namespace Signum.Engine.Templating
         {
             public Func<TemplateParameters, object> GetValue;
             public Type Type;
+            public string Format;
         }
 
         public static Dictionary<string, GlobalVariable> GlobalVariables = new Dictionary<string, GlobalVariable>();
 
-        public static void RegisterGlobalVariable<T>(string key, Func<TemplateParameters, T> globalVariable)
+        public static void RegisterGlobalVariable<T>(string key, Func<TemplateParameters, T> globalVariable, string format = null)
         {
             GlobalVariables.Add(key, new GlobalVariable
             {
                 GetValue = a => globalVariable(a),
                 Type = typeof(T),
+                Format = format,
             });
         }
 
@@ -584,7 +600,12 @@ namespace Signum.Engine.Templating
 
         public override string Format
         {
-            get { return Reflector.FormatString(Type); }
+            get
+            {
+                return Members == null ?
+                    GlobalVariables.TryGetC(globalKey).Try(v => v.Format) ?? Reflector.FormatString(Type) :
+                    Reflector.FormatString(Type);
+            }
         }
 
         public override Type Type

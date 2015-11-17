@@ -6,6 +6,7 @@ using Signum.Entities;
 using System.Linq.Expressions;
 using Signum.Utilities;
 using Signum.Entities.Files;
+using System.Net.Mail;
 
 namespace Signum.Entities.Mailing
 {
@@ -21,13 +22,81 @@ namespace Signum.Entities.Mailing
             set { SetToStr(ref name, value); }
         }
 
-        int port = 25;
-        public int Port
+        SmtpDeliveryFormat deliveryFormat;
+        public SmtpDeliveryFormat DeliveryFormat
         {
-            get { return port; }
-            set { Set(ref port, value); }
+            get { return deliveryFormat; }
+            set { Set(ref deliveryFormat, value); }
         }
 
+        SmtpDeliveryMethod deliveryMethod;
+        public SmtpDeliveryMethod DeliveryMethod
+        {
+            get { return deliveryMethod; }
+            set { Set(ref deliveryMethod, value); }
+        }
+
+        SmtpNetworkDeliveryEntity network;
+        public SmtpNetworkDeliveryEntity Network
+        {
+            get { return network; }
+            set { Set(ref network, value); }
+        }
+
+        [SqlDbType(Size = 300)]
+        string pickupDirectoryLocation;
+        [StringLengthValidator(AllowNulls = true, Min = 3, Max = 300), FileNameValidator]
+        public string PickupDirectoryLocation
+        {
+            get { return pickupDirectoryLocation; }
+            set { Set(ref pickupDirectoryLocation, value); }
+        }
+
+        EmailAddressEntity defaultFrom;
+        public EmailAddressEntity DefaultFrom
+        {
+            get { return defaultFrom; }
+            set { Set(ref defaultFrom, value); }
+        }
+
+        [NotNullable]
+        MList<EmailRecipientEntity> additionalRecipients = new MList<EmailRecipientEntity>();
+        [NoRepeatValidator]
+        public MList<EmailRecipientEntity> AdditionalRecipients
+        {
+            get { return additionalRecipients; }
+            set { Set(ref additionalRecipients, value); }
+        }
+
+        protected override string PropertyValidation(System.Reflection.PropertyInfo pi)
+        {
+            return stateValidator.Validate(this, pi) ?? base.PropertyValidation(pi);
+        }
+
+        static StateValidator<SmtpConfigurationEntity, SmtpDeliveryMethod> stateValidator = new StateValidator<SmtpConfigurationEntity, SmtpDeliveryMethod>(
+            a => a.DeliveryMethod, a => a.Network, a => a.PickupDirectoryLocation)
+            {
+                {SmtpDeliveryMethod.Network,        true, null },
+                {SmtpDeliveryMethod.SpecifiedPickupDirectory, null, true},
+                {SmtpDeliveryMethod.PickupDirectoryFromIis,    null, null },
+            };
+
+        static readonly Expression<Func<SmtpConfigurationEntity, string>> ToStringExpression = e => e.name;
+        public override string ToString()
+        {
+            return ToStringExpression.Evaluate(this);
+        }
+    }
+
+
+    public static class SmtpConfigurationOperation
+    {
+        public static readonly ExecuteSymbol<SmtpConfigurationEntity> Save = OperationSymbol.Execute<SmtpConfigurationEntity>();
+    }
+
+    [Serializable]
+    public class SmtpNetworkDeliveryEntity : EmbeddedEntity
+    {
         [NotNullable, SqlDbType(Size = 100)]
         string host;
         [StringLengthValidator(AllowNulls = false, Min = 3, Max = 100)]
@@ -35,6 +104,13 @@ namespace Signum.Entities.Mailing
         {
             get { return host; }
             set { Set(ref host, value); }
+        }
+
+        int port = 25;
+        public int Port
+        {
+            get { return port; }
+            set { Set(ref port, value); }
         }
 
         [SqlDbType(Size = 100)]
@@ -62,22 +138,6 @@ namespace Signum.Entities.Mailing
             set { Set(ref useDefaultCredentials, value); }
         }
 
-        EmailAddressEntity defaultFrom;
-        public EmailAddressEntity DefaultFrom
-        {
-            get { return defaultFrom; }
-            set { Set(ref defaultFrom, value); }
-        }
-
-        [NotNullable]
-        MList<EmailRecipientEntity> aditionalRecipients = new MList<EmailRecipientEntity>();
-        [NoRepeatValidator]
-        public MList<EmailRecipientEntity> AditionalRecipients
-        {
-            get { return aditionalRecipients; }
-            set { Set(ref aditionalRecipients, value); }
-        }
-
         bool enableSSL;
         public bool EnableSSL
         {
@@ -92,18 +152,6 @@ namespace Signum.Entities.Mailing
             get { return clientCertificationFiles; }
             set { Set(ref clientCertificationFiles, value); }
         }
-
-        static readonly Expression<Func<SmtpConfigurationEntity, string>> ToStringExpression = e => e.name;
-        public override string ToString()
-        {
-            return ToStringExpression.Evaluate(this);
-        }
-    }
-
-
-    public static class SmtpConfigurationOperation
-    {
-        public static readonly ExecuteSymbol<SmtpConfigurationEntity> Save = OperationSymbol.Execute<SmtpConfigurationEntity>();
     }
 
     [Serializable]
@@ -111,7 +159,7 @@ namespace Signum.Entities.Mailing
     {
         [NotNullable, SqlDbType(Size = 300)]
         string fullFilePath;
-        [StringLengthValidator(AllowNulls = false, Min = 2, Max = 300), ]
+        [StringLengthValidator(AllowNulls = false, Min = 2, Max = 300),]
         public string FullFilePath
         {
             get { return fullFilePath; }

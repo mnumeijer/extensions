@@ -24,7 +24,7 @@ namespace Signum.Entities.Dashboard
         }
 
         int row;
-        [NumberIsValidator(ComparisonType.GreaterThanOrEqual, 0)]
+        [NumberIsValidator(ComparisonType.GreaterThanOrEqualTo, 0)]
         public int Row
         {
             get { return row; }
@@ -385,7 +385,7 @@ namespace Signum.Entities.Dashboard
 
         [SqlDbType(Size = int.MaxValue)]
         string link;
-        [URLValidator, NotNullValidator]
+        [URLValidator, StringLengthValidator(AllowNulls = false)]
         public string Link
         {
             get { return link; }

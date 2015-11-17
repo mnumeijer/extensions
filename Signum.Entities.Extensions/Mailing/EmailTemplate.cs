@@ -100,13 +100,6 @@ namespace Signum.Entities.Mailing
             set { Set(ref masterTemplate, value); }
         }
 
-        Lite<SmtpConfigurationEntity> smtpConfiguration;
-        public Lite<SmtpConfigurationEntity> SmtpConfiguration
-        {
-            get { return smtpConfiguration; }
-            set { Set(ref smtpConfiguration, value); }
-        }
-
         bool isBodyHtml = true;
         public bool IsBodyHtml
         {
@@ -302,7 +295,7 @@ namespace Signum.Entities.Mailing
 
         [NotNullable, SqlDbType(Size = int.MaxValue)]
         string text;
-        [StringLengthValidator(AllowNulls = false, Max = int.MaxValue)]
+        [StringLengthValidator(AllowNulls = false, MultiLine=true)]
         public string Text
         {
             get { return text; }
@@ -370,20 +363,6 @@ namespace Signum.Entities.Mailing
         TokenAndEmailAddressCanNotBeSetAtTheSameTime,
         [Description("Token must be a {0}")]
         TokenMustBeA0,
-    }
-
-    public enum TemplateTokenMessage
-    { 
-        [Description("No column selected")]
-        NoColumnSelected,
-        [Description("You cannot add If blocks on collection fields")]
-        YouCannotAddIfBlocksOnCollectionFields,
-        [Description("You have to add the Element token to use Foreach on collection fields")]
-        YouHaveToAddTheElementTokenToUseForeachOnCollectionFields,
-        [Description("You can only add Foreach blocks with collection fields")]
-        YouCanOnlyAddForeachBlocksWithCollectionFields,
-        [Description("You cannot add Blocks with All or Any")]
-        YouCannotAddBlocksWithAllOrAny
     }
 
     public enum EmailTemplateViewMessage

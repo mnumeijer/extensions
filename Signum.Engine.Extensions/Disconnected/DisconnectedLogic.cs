@@ -119,6 +119,9 @@ namespace Signum.Engine.Disconnected
             if (DisconnectedLogic.OfflineMode)
                 return null;
 
+            if (ImportManager.ImportInProgress)
+                return null;
+
             return Schema.Current.Tables.Values
                 .Where(t => GetStrategy(t.Type).Upload != Upload.None)
                 .SelectMany(t => t.TablesMList().Cast<ITable>().PreAnd(t))
@@ -153,7 +156,7 @@ namespace Signum.Engine.Disconnected
                 new Execute(DisconnectedMachineOperation.Save)
                 {
                     FromStates = { DisconnectedMachineState.Connected },
-                    ToState = DisconnectedMachineState.Connected,
+                    ToStates = { DisconnectedMachineState.Connected },
                     AllowsNew = true,
                     Lite = false,
                     Execute = (dm, _) => 
@@ -165,7 +168,7 @@ namespace Signum.Engine.Disconnected
                 new Execute(DisconnectedMachineOperation.UnsafeUnlock)
                 {
                     FromStates = { DisconnectedMachineState.Disconnected, DisconnectedMachineState.Faulted, DisconnectedMachineState.Fixed, DisconnectedMachineState.Connected }, //not fully disconnected
-                    ToState = DisconnectedMachineState.Connected,
+                    ToStates = { DisconnectedMachineState.Connected },
                     Execute = (dm, _) =>
                     {
                         ImportManager.UnlockTables(dm.ToLite());

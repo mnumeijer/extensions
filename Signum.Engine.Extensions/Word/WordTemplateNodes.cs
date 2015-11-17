@@ -186,7 +186,10 @@ namespace Signum.Engine.Word
 
         protected internal override void RenderNode(WordTemplateParameters p)
         {
-            this.Remove();
+            if (this.Parent is Paragraph && !this.Parent.ChildElements.Any(a => BlockContainerNode.IsImportant (a) && a != this))
+                this.Parent.Remove();
+            else
+                this.Remove();
         }
 
         protected internal override void RenderTemplate(ScopedDictionary<string, ValueProviderBase> variables)
@@ -201,8 +204,6 @@ namespace Signum.Engine.Word
         public override void Synchronize(SyncronizationContext sc)
         {
             ValueProvider.Synchronize(sc, "@declare");
-
-            ValueProvider.Declare(sc.Variables);
         }
     }
 
@@ -319,7 +320,7 @@ namespace Signum.Engine.Word
             }
         }
 
-        private bool IsImportant(OpenXmlElement c)
+        public static bool IsImportant(OpenXmlElement c)
         {
             if (c is Paragraph)
                 return true;
@@ -333,6 +334,9 @@ namespace Signum.Engine.Word
 
                 return true; 
             }
+
+            if (c is BaseNode)
+                return true;
 
             return false;
         }

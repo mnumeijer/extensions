@@ -83,7 +83,7 @@ namespace Signum.Engine.Word
                                 par.Append(firstRunPart);
                             }
 
-                            par.Append(new MatchNode(m) { RunProperties = startRun.RunProperties.TryDo(r => r.Remove()) });
+                            par.Append(new MatchNode(m) { RunProperties = startRun.RunProperties.Try(r => (RunProperties)r.CloneNode(true)) });
 
                             ElementInfo end = start;
                             while (end.Interval.Max < interval.Max) //Ignore
@@ -95,7 +95,7 @@ namespace Signum.Engine.Word
 
                                 var textPart = end.Text.Substring(interval.Max - end.Interval.Min);
                                 Run endRunPart = new Run { RunProperties = endRun.RunProperties.Try(r => (RunProperties)r.CloneNode(true)) };
-                                endRunPart.AppendChild(new Text { Text = textPart });
+                                endRunPart.AppendChild(new Text { Text = textPart, Space = SpaceProcessingModeValues.Preserve });
 
                                 stack.Push(new ElementInfo
                                 {
@@ -165,7 +165,7 @@ namespace Signum.Engine.Word
                     var token = m.Groups["token"].Value;
                     var keyword = m.Groups["keyword"].Value;
                     var dec = m.Groups["dec"].Value;
-
+                    
                     switch (keyword)
                     {
                         case "":
@@ -176,11 +176,11 @@ namespace Signum.Engine.Word
                             {
                                 var vp = TryParseValueProvider(type, tok.Groups["token"].Value, dec);
 
-                                var format = tok.Groups["format"].Value;
+                                var format = tok.Groups["format"].Value.DefaultText(null);
 
                                 matchNode.Parent.ReplaceChild(new TokenNode(vp, format)
                                 {
-                                    RunProperties = matchNode.RunProperties.TryDo(d => d.Remove())
+                                    RunProperties = matchNode.RunProperties.TryDo(d => d.Remove()) 
                                 }, matchNode);
 
                                 DeclareVariable(vp);
@@ -190,7 +190,10 @@ namespace Signum.Engine.Word
                             {
                                 var vp = TryParseValueProvider(type, token, dec);
 
-                                matchNode.Parent.ReplaceChild(new DeclareNode(vp, this.AddError), matchNode);
+                                matchNode.Parent.ReplaceChild(new DeclareNode(vp, this.AddError)
+                                {
+                                    RunProperties = matchNode.RunProperties.TryDo(d => d.Remove()) 
+                                }, matchNode);
 
                                 DeclareVariable(vp);
                             }
@@ -221,16 +224,21 @@ namespace Signum.Engine.Word
                         case "notany":
                             {
                                 var an = PeekBlock<AnyNode>();
-                                an.NotAnyToken = new MatchNodePair(matchNode);
+                                if (an != null)
+                                {
+                                    an.NotAnyToken = new MatchNodePair(matchNode);
+                                }
                                 break;
                             }
                         case "endany":
                             {
                                 var an = PopBlock<AnyNode>();
-                                an.EndAnyToken = new MatchNodePair(matchNode);
+                                if (an != null)
+                                {
+                                    an.EndAnyToken = new MatchNodePair(matchNode);
 
-                                an.ReplaceBlock();
-
+                                    an.ReplaceBlock();
+                                }
                                 break;
                             }
                         case "if":
@@ -260,17 +268,21 @@ namespace Signum.Engine.Word
                         case "else":
                             {
                                 var an = PeekBlock<IfNode>();
-                                an.ElseToken = new MatchNodePair(matchNode);
-
+                                if (an != null)
+                                {
+                                    an.ElseToken = new MatchNodePair(matchNode);
+                                }
                                 break;
                             }
                         case "endif":
                             {
                                 var ifn = PopBlock<IfNode>();
-                                ifn.EndIfToken = new MatchNodePair(matchNode);
+                                if (ifn != null)
+                                {
+                                    ifn.EndIfToken = new MatchNodePair(matchNode);
 
-                                ifn.ReplaceBlock();
-
+                                    ifn.ReplaceBlock();
+                                }
                                 break;
                             }
                         case "foreach":
@@ -285,13 +297,16 @@ namespace Signum.Engine.Word
                         case "endforeach":
                             {
                                 var fn = PopBlock<ForeachNode>();
-                                fn.EndForeachToken = new MatchNodePair(matchNode);
+                                if (fn != null)
+                                {
+                                    fn.EndForeachToken = new MatchNodePair(matchNode);
 
-                                fn.ReplaceBlock();
+                                    fn.ReplaceBlock();
+                                }
                                 break;
                             }
                         default:
-                            AddError(false, "'{0}' is deprecated".FormatWith(keyword));
+                            AddError(true, "'{0}' is deprecated".FormatWith(keyword));
                             break;
                     }
                 }

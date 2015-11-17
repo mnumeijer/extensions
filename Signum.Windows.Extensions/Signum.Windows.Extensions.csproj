@@ -178,9 +178,6 @@
     <Compile Include="Chart\ChartScript.xaml.cs">
       <DependentUpon>ChartScript.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Chart\ChartScriptParameter.xaml.cs">
-      <DependentUpon>ChartScriptParameter.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Chart\UserChart.xaml.cs">
       <DependentUpon>UserChart.xaml</DependentUpon>
     </Compile>
@@ -260,9 +257,6 @@
       <DependentUpon>FilePath.xaml</DependentUpon>
     </Compile>
     <Compile Include="Files\FilePathClient.cs" />
-    <Compile Include="Files\FileRepository.xaml.cs">
-      <DependentUpon>FileRepository.xaml</DependentUpon>
-    </Compile>
     <Compile Include="ExtensionsImageLoader.cs" />
     <Compile Include="Files\ImageFileExtension.cs" />
     <Compile Include="Help\HelpAdorner.cs" />
@@ -568,10 +562,6 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Chart\ChartScriptParameter.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="Chart\UserChart.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -669,12 +659,6 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Files\FilePath.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Files\FileRepository.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
       <Generator>MSBuild:Compile</Generator>

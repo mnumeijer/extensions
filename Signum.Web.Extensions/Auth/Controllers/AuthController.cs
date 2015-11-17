@@ -203,7 +203,7 @@ namespace Signum.Web.Auth
 
                 ResetPasswordRequestEntity rpr = ResetPasswordRequestLogic.ResetPasswordRequest(user);
                 string url = HttpContext.Request.Url.GetLeftPart(UriPartial.Authority) + Url.Action<AuthController>(ac => ac.ResetPasswordCode(email, rpr.Code));
-                new ResetPasswordRequestMail { Entity = rpr, Url = url }.SendMailAsync();
+                new ResetPasswordRequestMail(rpr, url).SendMailAsync();
             }
 
             TempData["email"] = email;
@@ -316,6 +316,12 @@ namespace Signum.Web.Auth
             if (string.IsNullOrEmpty(password))
                 return LoginError("password", AuthMessage.PasswordMustHaveAValue.NiceToString());
 
+            if(UserEntity.Current != null)
+            {
+                if (UserLoggingOut != null)
+                    UserLoggingOut();
+            }
+
             // Attempt to login
             UserEntity user = null;
             try
@@ -414,8 +420,6 @@ namespace Signum.Web.Auth
 
             if (UserLoggingOut != null)
                 UserLoggingOut();
-
-            FormsAuthentication.SignOut();
 
             UserTicketClient.RemoveCookie();
             

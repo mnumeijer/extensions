@@ -39,7 +39,7 @@ namespace Signum.Web.Selenium
                     PollingInterval = DefaultPoolingInterval
                 };
 
-                wait.IgnoreExceptionTypes(typeof(NoSuchElementException), typeof(NoAlertPresentException));
+                wait.IgnoreExceptionTypes(typeof(NoSuchElementException), typeof(NoAlertPresentException), typeof(StaleElementReferenceException));
                 
                 return wait.Until(_ => condition());
             }
@@ -50,6 +50,12 @@ namespace Signum.Web.Selenium
                     selenium.Title,
                     selenium.Url));
             }
+        }
+
+        public static void WaitEquals<T>(this RemoteWebDriver selenium, T expectedValue, Func<T> value, TimeSpan? timeout = null)
+        {
+            T lastValue = default(T);
+            selenium.Wait(() => EqualityComparer<T>.Default.Equals(lastValue = value(), expectedValue), () => "expression to be " + expectedValue + " but is " + lastValue, timeout);
         }
 
         public static IWebElement TryFindElement(this RemoteWebDriver selenium, By locator)
@@ -152,7 +158,7 @@ namespace Signum.Web.Selenium
                 selenium.SwitchTo().Alert();
                 return true;
             }
-            catch (NoAlertPresentException e)
+            catch (NoAlertPresentException)
             {
                 return false;
             }
@@ -259,6 +265,46 @@ namespace Signum.Web.Selenium
             }
 
             button.Click();
+        }
+
+        public static void SafeClick(this IWebElement element)
+        {
+            if (!element.Displayed)
+            {
+                element.GetDriver().ScrollTo(element);
+            }
+
+            element.Click();
+        }
+
+        public static void ScrollTo(this RemoteWebDriver driver, IWebElement element)
+        {
+            IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
+            js.ExecuteScript("arguments[0].scrollIntoView(true);", element);
+            Thread.Sleep(500);
+        }
+
+        public static void LoseFocus(this RemoteWebDriver driver, IWebElement element)
+        {
+            IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
+            js.ExecuteScript("arguments[0].focus(); arguments[0].blur(); return true", element);
+        }
+
+        public static void Retry<T>(this RemoteWebDriver driver, int times, Action action) where T : Exception
+        {
+            for (int i = 0; i < times; i++)
+            {
+                try
+                {
+                    action();
+                    return;
+                }
+                catch (T)
+                {
+                    if (i >= times - 1)
+                        throw;
+                }
+            }
         }
     }
 }

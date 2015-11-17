@@ -45,6 +45,26 @@ module ChartUtils {
         };
     }
 
+    export function ellipsis(elem : SVGTextElement, width: number, padding? : number, ellipsisSymbol?: string) {
+
+        if (ellipsisSymbol === null || ellipsisSymbol == undefined)
+            ellipsisSymbol = '…';
+
+        if (padding)
+            width -= padding * 2;
+
+        var self = d3.select(elem);
+        var textLength = (<any>self.node()).getComputedTextLength();
+        var text = self.text();
+        while (textLength > width && text.length > 0) {
+            text = text.slice(0, -1);
+            while (text[text.length - 1] == ' ' && text.length > 0)
+                text = text.slice(0, -1);
+            self.text(text + ellipsisSymbol);
+            textLength = (<any>self.node()).getComputedTextLength();
+        }
+    } 
+
     export function getClickKeys(row, columns) {
         var options = "";
         for (var k in columns) {
@@ -94,8 +114,6 @@ module ChartUtils {
     }
 
     export function scaleFor(column, values, minRange, maxRange, scaleName: string): D3.Scale.Scale {
-        if (scaleName == undefined)
-            scaleName = column.parameter1;
 
         if (scaleName == "Elements")
             return d3.scale.ordinal()
@@ -107,14 +125,23 @@ module ChartUtils {
                 .domain([0, d3.max(values)])
                 .range([minRange, maxRange]);
 
-        if (scaleName == "MinMax")
-            return ((column.type == "Date" || column.type == "DateTime") ?
-                <D3.Scale.Scale>d3.time.scale() :
-                <D3.Scale.Scale>d3.scale.linear())
-                .domain([d3.min(values),
-                    d3.max(values)])
-                .range([minRange, maxRange]);
+        if (scaleName == "MinMax") {
+            if (column.type == "Date" || column.type == "DateTime") {
+                var scale = d3.time.scale()
+                    .domain([new Date(<any>d3.min(values)), new Date(<any>d3.max(values))])
+                    .range([minRange, maxRange]);
 
+                var f = function (d) { return scale(new Date(d)); };
+                (<any>f).ticks = scale.ticks; 
+                (<any>f).tickFormat = scale.tickFormat; 
+                return  <D3.Scale.Scale>f;
+            }
+            else {
+                return <D3.Scale.Scale>d3.scale.linear()
+                    .domain([d3.min(values), d3.max(values)])
+                    .range([minRange, maxRange]);
+            }
+        }
 
         if (scaleName == "Log")
             return d3.scale.log()

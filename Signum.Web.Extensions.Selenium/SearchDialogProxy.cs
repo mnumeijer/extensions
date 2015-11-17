@@ -345,6 +345,11 @@ namespace Signum.Web.Selenium
         {
             get { return this.Selenium.IsElementVisible(this.FiltersPanelLocator); }
         }
+
+        public ILineContainer<T> SimpleFilterBuilder<T>() where T : ModifiableEntity
+        {
+            return new LineContainer<T>(this.Selenium, this.Prefix);
+        }
     }
 
     public class FiltersProxy
@@ -655,9 +660,20 @@ namespace Signum.Web.Selenium
             return new NormalPage<T>(Selenium).WaitLoaded();
         }
 
-        public EntityContextMenuProxy EntityContextMenu(int rowIndex)
+        public EntityContextMenuProxy EntityContextMenu(int rowIndex, string columnToken = "Entity")
         {
-            Selenium.FindElement(CellLocator(rowIndex, "Entity")).ContextClick();
+            Selenium.FindElement(CellLocator(rowIndex, columnToken)).ContextClick();
+
+            EntityContextMenuProxy ctx = new EntityContextMenuProxy(this, isContext: true);
+
+            ctx.WaitNotLoading();
+
+            return ctx;
+        }
+
+        public EntityContextMenuProxy EntityContextMenu(Lite<Entity> lite, string columnToken = "Entity")
+        {
+            Selenium.FindElement(CellLocator(lite, columnToken)).ContextClick();
 
             EntityContextMenuProxy ctx = new EntityContextMenuProxy(this, isContext: true);
 
@@ -728,6 +744,11 @@ namespace Signum.Web.Selenium
 
             Selenium.Wait(() => Selenium.FindElement(headerSelector).FindElements(By.CssSelector("span")).Any(s => s.Text == newName));
         }
+
+        public void WaitActiveSuccess()
+        {
+            Selenium.WaitElementVisible(RowsLocator.CombineCss(".active.sf-entity-ctxmenu-success"));
+        }
     }
 
     public class EntityContextMenuProxy
@@ -776,7 +797,7 @@ namespace Signum.Web.Selenium
             if (consumeConfirmation)
                 this.resultTable.Selenium.ConsumeAlert();
 
-            resultTable.Selenium.WaitElementNotVisible(EntityContextMenuLocator);
+            resultTable.WaitActiveSuccess();
         }
 
         public void DeleteClick(IOperationSymbolContainer symbolContainer, bool consumeConfirmation = true)
@@ -789,6 +810,8 @@ namespace Signum.Web.Selenium
             MenuClick(operationSymbol.KeyWeb());
             if (consumeConfirmation)
                 this.resultTable.Selenium.ConsumeAlert();
+
+            resultTable.WaitActiveSuccess();
         }
 
         public PopupControl<ProcessEntity> DeleteProcessClick(IOperationSymbolContainer symbolContainer)
@@ -860,8 +883,8 @@ namespace Signum.Web.Selenium
         public void WaitNotLoading()
         {
             this.resultTable.Selenium.Wait(() =>
-                this.resultTable.Selenium.FindElement(this.EntityContextMenuLocator)
-                    .FindElements(By.CssSelector("li")).Any(a => !a.FindElements(By.CssSelector(".sf-tm-selected-loading")).Any()));
+               !this.resultTable.Selenium.FindElement(this.EntityContextMenuLocator)
+                    .FindElements(By.CssSelector("li.sf-tm-selected-loading")).Any());
         }
     }
 

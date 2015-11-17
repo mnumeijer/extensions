@@ -8,6 +8,7 @@ using Signum.Utilities.Reflection;
 using System.Text.RegularExpressions;
 using Signum.Entities.DynamicQuery;
 using System.Reflection;
+using System.Globalization;
 
 namespace Signum.Entities.Chart
 {
@@ -36,9 +37,16 @@ namespace Signum.Entities.Chart
             }
         }
 
+        int? columnIndex;
+        public int? ColumnIndex
+        {
+            get { return columnIndex; }
+            set { Set(ref columnIndex, value); }
+        }
+
         [NotNullable, SqlDbType(Size = 200)]
         string valueDefinition;
-        [StringLengthValidator(AllowNulls = false, Max = 200)]
+        [StringLengthValidator(AllowNulls = true, Max = 200)]
         public string ValueDefinition
         {
             get { return valueDefinition; }
@@ -74,7 +82,7 @@ namespace Signum.Entities.Chart
             switch (Type)
             {
                 case ChartParameterType.Enum: return GetEnumValues().DefaultValue(token);
-                case ChartParameterType.Number: return GetNumberInterval().DefaultValue.ToString();
+                case ChartParameterType.Number: return GetNumberInterval().DefaultValue.ToString(CultureInfo.InvariantCulture);
                 case ChartParameterType.String: return ValueDefinition;
                 default: throw new InvalidOperationException();
             }
@@ -155,13 +163,13 @@ namespace Signum.Entities.Chart
 
                 interval = new NumberInterval();
 
-                if (!ReflectionTools.TryParse<decimal>(m.Groups["def"].Value, out interval.DefaultValue))
+                if (!ReflectionTools.TryParse<decimal>(m.Groups["def"].Value, CultureInfo.InvariantCulture, out interval.DefaultValue))
                     return "Invalid default value";
 
-                if (!ReflectionTools.TryParse<decimal?>(m.Groups["min"].Value, out interval.MinValue))
+                if (!ReflectionTools.TryParse<decimal?>(m.Groups["min"].Value, CultureInfo.InvariantCulture, out interval.MinValue))
                     return "Invalid min value";
 
-                if (!ReflectionTools.TryParse<decimal?>(m.Groups["max"].Value, out interval.MaxValue))
+                if (!ReflectionTools.TryParse<decimal?>(m.Groups["max"].Value, CultureInfo.InvariantCulture, out interval.MaxValue))
                     return "Invalid max value";
 
                 return null;
@@ -280,29 +288,6 @@ namespace Signum.Entities.Chart
             }
         }
 
-        internal XElement ExportXml(int index)
-        {
-            return new XElement("Parameter" + index,
-                new XAttribute("Name", Name),
-                new XAttribute("Type", Type),
-                new XAttribute("ValueDefinition", ValueDefinition));
-        }
-
-        internal static ChartScriptParameterEntity ImportXml(XElement c, int index)
-        {
-            var element = c.Element("Parameter" + index);
-
-            if (element == null)
-                return null;
-
-            return new ChartScriptParameterEntity
-            {
-                Name = element.Attribute("Name").Value,
-                Type = element.Attribute("Type").Value.ToEnum<ChartParameterType>(),
-                ValueDefinition = element.Attribute("ValueDefinition").Value,
-            };
-        }
-
         internal ChartScriptParameterEntity Clone()
         {
             return new ChartScriptParameterEntity
@@ -310,7 +295,21 @@ namespace Signum.Entities.Chart
                 Name = Name,
                 Type = Type,
                 ValueDefinition = ValueDefinition,
+                ColumnIndex = ColumnIndex
             };
+        }
+
+        internal bool ShouldHaveColumnIndex()
+        {
+            return Type == ChartParameterType.Enum && GetEnumValues().Any(a => a.TypeFilter.HasValue);
+        }
+
+        public QueryToken GetToken(IChartBase chartBase)
+        {
+            if (this.ColumnIndex == null)
+                return null;
+
+            return chartBase.Columns[this.ColumnIndex.Value].Token.Try(t => t.Token);
         }
     }
 

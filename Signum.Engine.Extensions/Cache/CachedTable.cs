@@ -91,6 +91,7 @@ namespace Signum.Engine.Cache
                     st.ResetAll(forceReset);
         }
 
+        public abstract void SchemaCompleted();
 
         internal void LoadAll()
         {
@@ -137,7 +138,7 @@ namespace Signum.Engine.Cache
 
         internal static readonly MethodInfo ToStringMethod = ReflectionTools.GetMethodInfo((object o) => o.ToString());
 
-     
+        internal abstract bool Contains(PrimaryKey primaryKey);
     }
 
   
@@ -158,6 +159,8 @@ namespace Signum.Engine.Cache
         Func<PrimaryKey, string> toStrGetter;
 
         public override IColumn ParentColumn { get; set; }
+
+        SemiCachedController<T> semiCachedController;
 
         public CachedTable(ICacheLogicController controller, AliasGenerator aliasGenerator, string lastPartialJoin, string remainingJoins)
             : base(controller)
@@ -199,7 +202,6 @@ namespace Signum.Engine.Cache
                 completer = completerExpression.Compile();
 
                 idGetter = ctr.GetPrimaryKeyGetter((IColumn)table.PrimaryKey);
-                toStrGetter = ToStringExpressionVisitor.GetToString<T>(ctr, s => s.ToString());
             }
 
             rows = new ResetLazy<Dictionary<PrimaryKey, object>>(() =>
@@ -219,7 +221,7 @@ namespace Signum.Engine.Cache
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Load {0}".FormatWith(GetType().TypeName()));
 
-                    ((SqlConnector)Connector.Current).ExecuteDataReaderOpionalDependency(query, OnChange, fr =>
+                    ((SqlConnector)Connector.Current).ExecuteDataReaderOptionalDependency(query, OnChange, fr =>
                     {
                         object obj = rowReader(fr);
                         result[idGetter(obj)] = obj; //Could be repeated joins
@@ -229,6 +231,20 @@ namespace Signum.Engine.Cache
 
                 return result;
             }, mode: LazyThreadSafetyMode.ExecutionAndPublication);
+
+            if(!CacheLogic.WithSqlDependency && lastPartialJoin.HasText()) //Is semi
+            {
+                semiCachedController = new SemiCachedController<T>(this);
+            }
+        }
+
+        public override void SchemaCompleted()
+        {
+            toStrGetter = ToStringExpressionVisitor.GetToString<T>(this.Constructor, s => s.ToString());
+            if (this.subTables != null)
+                foreach (var item in this.subTables)
+                    item.SchemaCompleted();
+
         }
 
         protected override void Reset()
@@ -301,11 +317,12 @@ namespace Signum.Engine.Cache
             get { return table; }
         }
 
+
+        internal override bool Contains(PrimaryKey primaryKey)
+        {
+            return this.rows.Value.ContainsKey(primaryKey);
+        }
     }
-
-
-   
-
 
 
     class CachedTableMList<T> : CachedTableBase
@@ -390,7 +407,7 @@ namespace Signum.Engine.Cache
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Load {0}".FormatWith(GetType().TypeName()));
 
-                    ((SqlConnector)Connector.Current).ExecuteDataReaderOpionalDependency(query, OnChange, fr =>
+                    ((SqlConnector)Connector.Current).ExecuteDataReaderOptionalDependency(query, OnChange, fr =>
                     {
                         object obj = rowReader(fr);
                         PrimaryKey parentId = parentIdGetter(obj);
@@ -460,6 +477,18 @@ namespace Signum.Engine.Cache
         {
             get { return table; }
         }
+
+        internal override bool Contains(PrimaryKey primaryKey)
+        {
+            throw new InvalidOperationException("CacheMListTable does not implements contains");
+        }
+
+        public override void SchemaCompleted()
+        {
+            if (this.subTables != null)
+                foreach (var item in this.subTables)
+                    item.SchemaCompleted();
+        }
     }
 
 
@@ -469,21 +498,36 @@ namespace Signum.Engine.Cache
 
         Table table;
 
+        Alias currentAlias;
+        string lastPartialJoin;
+        string remainingJoins; 
+
         Func<FieldReader, KeyValuePair<PrimaryKey, string>> rowReader;
         ResetLazy<Dictionary<PrimaryKey, string>> toStrings;
+
+        SemiCachedController<T> semiCachedController;
 
         public CachedLiteTable(ICacheLogicController controller, AliasGenerator aliasGenerator, string lastPartialJoin, string remainingJoins)
             : base(controller)
         {
             this.table = Schema.Current.Table(typeof(T));
+            this.lastPartialJoin = lastPartialJoin;
+            this.remainingJoins = remainingJoins;
+            this.currentAlias = aliasGenerator.NextTableAlias(table.Name.Name);
 
-            Alias currentAlias = aliasGenerator.NextTableAlias(table.Name.Name);
+            if (!CacheLogic.WithSqlDependency)
+            {
+                semiCachedController = new SemiCachedController<T>(this);
+            }
+        }
 
-            List<IColumn> columns = new List<IColumn> { table.PrimaryKey }; 
+        public override void SchemaCompleted()
+        {
+            List<IColumn> columns = new List<IColumn> { table.PrimaryKey };
 
             ParameterExpression reader = Expression.Parameter(typeof(FieldReader));
 
-            var expression = ToStringExpressionVisitor.GetToString(table, reader, columns);  
+            var expression = ToStringExpressionVisitor.GetToString(table, reader, columns);
 
             //Query
             using (ObjectName.OverrideOptions(new ObjectNameOptions { AvoidDatabaseName = true }))
@@ -493,7 +537,7 @@ namespace Signum.Engine.Cache
                     table.Name.ToString(),
                     currentAlias.Name.SqlEscape());
 
-                select += lastPartialJoin + currentAlias.Name.SqlEscape() + "." + table.PrimaryKey.Name.SqlEscape() + "\r\n" + remainingJoins;
+                select += this.lastPartialJoin + currentAlias.Name.SqlEscape() + "." + table.PrimaryKey.Name.SqlEscape() + "\r\n" + this.remainingJoins;
 
                 query = new SqlPreCommandSimple(select);
             }
@@ -524,7 +568,7 @@ namespace Signum.Engine.Cache
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Load {0}".FormatWith(GetType().TypeName()));
 
-                    ((SqlConnector)Connector.Current).ExecuteDataReaderOpionalDependency(query, OnChange, fr =>
+                    ((SqlConnector)Connector.Current).ExecuteDataReaderOptionalDependency(query, OnChange, fr =>
                     {
                         var kvp = rowReader(fr);
                         result[kvp.Key] = kvp.Value;
@@ -534,11 +578,18 @@ namespace Signum.Engine.Cache
 
                 return result;
             }, mode: LazyThreadSafetyMode.ExecutionAndPublication);
+
+            if (this.subTables != null)
+                foreach (var item in this.subTables)
+                    item.SchemaCompleted();
         }
 
         protected override void Reset()
         {
-            if (CacheLogic.LogWriter != null)
+            if (toStrings == null)
+                return;
+
+            if (CacheLogic.LogWriter != null )
                 CacheLogic.LogWriter.WriteLine((toStrings.IsValueCreated ? "RESET {0}" : "Reset {0}").FormatWith(GetType().TypeName()));
 
             toStrings.Reset();
@@ -546,6 +597,9 @@ namespace Signum.Engine.Cache
 
         protected override void Load()
         {
+            if (toStrings == null)
+                return;
+
             toStrings.Load();
         }
 
@@ -554,7 +608,7 @@ namespace Signum.Engine.Cache
         {
             Interlocked.Increment(ref hits);
 
-            return retriever.ModifiablePostRetrieving((LiteImp<T>)Lite.Create<T>(id, toStrings.Value[id]));
+            return retriever.ModifiablePostRetrieving((LiteImp<T>)Lite.Create<T>(id,toStrings==null?null: toStrings.Value[id]));
         }
 
         public override int? Count
@@ -640,6 +694,70 @@ namespace Signum.Engine.Cache
 
                 throw new InvalidOperationException("{0} not supported when caching the ToString for a Lite of a transacional entity ({1})".FormatWith(field.GetType().TypeName(), this.table.Type.TypeName()));
             }
+        }
+
+        internal override bool Contains(PrimaryKey primaryKey)
+        {
+            return this.toStrings.Value.ContainsKey(primaryKey);
+        }
+    }
+
+    public class SemiCachedController<T> where T : Entity
+    {
+        CachedTableBase cachedTable;
+
+        public SemiCachedController(CachedTableBase cachedTable)
+        {
+            this.cachedTable = cachedTable;
+
+            CacheLogic.semiControllers.GetOrCreate(typeof(T)).Add(cachedTable);
+
+            var ee = Schema.Current.EntityEvents<T>();
+            ee.Saving += ident =>
+            {
+                if (ident.IsGraphModified && !ident.IsNew)
+                {
+                    cachedTable.LoadAll();
+
+                    if (cachedTable.Contains(ident.Id))
+                        DisableAndInvalidate();
+                }
+            };
+            //ee.PreUnsafeDelete += query => DisableAndInvalidate();
+            ee.PreUnsafeUpdate += (update, entityQuery) => DisableAndInvalidateMassive();
+            ee.PreUnsafeInsert += (query, constructor, entityQuery) =>
+            {
+                if (constructor.Body.Type.IsInstantiationOf(typeof(MListElement<,>)))
+                    DisableAndInvalidateMassive();
+
+                return constructor;
+            };
+            ee.PreUnsafeMListDelete += (mlistQuery, entityQuery) => DisableAndInvalidateMassive();
+            ee.PreBulkInsert += inMListTable =>
+            {
+                if (inMListTable)
+                    DisableAndInvalidateMassive();
+            };
+        }
+
+        void DisableAndInvalidateMassive()
+        {
+            if (CacheLogic.IsAssumedMassiveChangeAsInvalidation<T>())
+                DisableAndInvalidate();
+        }
+
+        void DisableAndInvalidate()
+        {
+            CacheLogic.DisableAllConnectedTypesInTransaction(this.cachedTable.controller.Type);
+
+            Transaction.PostRealCommit -= Transaction_PostRealCommit;
+            Transaction.PostRealCommit += Transaction_PostRealCommit;
+        }
+
+        void Transaction_PostRealCommit(Dictionary<string, object> obj)
+        {
+            cachedTable.ResetAll(forceReset: false);
+            CacheLogic.NotifyInvalidateAllConnectedTypes(this.cachedTable.controller.Type);
         }
     }
 }

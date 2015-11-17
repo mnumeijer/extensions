@@ -33,7 +33,7 @@ namespace Signum.Engine.Mailing
 
             this.queryName = QueryLogic.ToQueryName(template.Query.Key);
             this.qd = DynamicQueryManager.Current.QueryDescription(queryName);
-            this.smtpConfig = template.SmtpConfiguration.Try(SmtpConfigurationLogic.RetrieveFromCache) ?? SmtpConfigurationLogic.DefaultSmtpConfiguration();
+            this.smtpConfig = EmailTemplateLogic.GetSmtpConfiguration == null ? null : EmailTemplateLogic.GetSmtpConfiguration(template);
         }
 
         ResultTable table;
@@ -57,7 +57,6 @@ namespace Signum.Engine.Mailing
                         IsBodyHtml = template.IsBodyHtml,
                         EditableMessage = template.EditableMessage,
                         Template = template.ToLite(),
-                        SmtpConfiguration = template.SmtpConfiguration,
                     };
 
                     CultureInfo ci = recipients.Where(a => a.Kind == EmailRecipientKind.To).Select(a => a.OwnerData.CultureInfo).FirstOrDefault().ToCultureInfo();
@@ -192,8 +191,10 @@ namespace Signum.Engine.Mailing
                     recipients.AddRange(systemEmail.GetRecipients());
 
                 if (smtpConfig != null)
-                    recipients.AddRange(smtpConfig.AditionalRecipients.Select(r =>
-                        new EmailOwnerRecipientData(r.EmailOwner.Retrieve().EmailOwnerData) { Kind = r.Kind }));
+                {
+                    recipients.AddRange(smtpConfig.AdditionalRecipients.Where(a => a.EmailOwner == null).Select(r =>
+                        new EmailOwnerRecipientData(new EmailOwnerData { CultureInfo = null, DisplayName = r.DisplayName, Email = r.EmailAddress, Owner = r.EmailOwner }) { Kind = r.Kind }));
+                }
 
                 if (recipients.Any())
                     yield return recipients;

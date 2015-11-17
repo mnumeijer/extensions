@@ -10,11 +10,13 @@ using System.Linq.Expressions;
 using System.ComponentModel;
 using System.Web;
 using Signum.Entities.Patterns;
+using System.Runtime.CompilerServices;
+using System.Diagnostics;
 
 namespace Signum.Entities.Files
 {
     [Serializable,  EntityKind(EntityKind.SharedPart, EntityData.Transactional)]
-    public class FilePathEntity : LockableEntity, IFile	
+    public class FilePathEntity : LockableEntity, IFile, IFilePath	
     {
         public static string ForceExtensionIfEmpty = ".dat";
 
@@ -60,7 +62,6 @@ namespace Signum.Entities.Files
                     value += ForceExtensionIfEmpty;
 
                 SetToStr(ref fileName, value);
-               
             }
         }
 
@@ -97,6 +98,14 @@ namespace Signum.Entities.Files
             set { Set(ref sufix, value); }
         }
 
+        [Ignore]
+        string calculatedDirectory;
+        public string CalculatedDirectory
+        {
+            get { return calculatedDirectory; }
+            set { Set(ref calculatedDirectory, value); }
+        }
+
         [NotNullable]
         FileTypeSymbol fileType;
         public FileTypeSymbol FileType
@@ -105,35 +114,62 @@ namespace Signum.Entities.Files
             internal set { Set(ref fileType, value); }
         }
 
-        [NotNullable]
-        FileRepositoryEntity repository;
-        public FileRepositoryEntity Repository
+        [Ignore]
+        internal PrefixPair prefixPair;
+        public void SetPrefixPair(PrefixPair prefixPair)
         {
-            get { return repository; }
-            set { Set(ref repository, value); }
+            this.prefixPair = prefixPair;
         }
 
-        static Expression<Func<FilePathEntity, string>> FullPhysicalPathExpression = fp => Path.Combine(fp.Repository.FullPhysicalPrefix, fp.Sufix);
         public string FullPhysicalPath
         {
-            get { return Repository == null ? null : Path.Combine(Repository.FullPhysicalPrefix, Sufix); }
+            get
+            {
+                if (prefixPair == null)
+                    throw new InvalidOperationException("prefixPair not set");
+
+                return Path.Combine(prefixPair.PhysicalPrefix, Sufix);
+            }
         }
 
-        static Expression<Func<FilePathEntity, string>> FullWebPathExpression = fp =>
-            fp.Repository != null && fp.Repository.WebPrefix.HasText() ?
-                fp.Repository.WebPrefix + "/" + HttpFilePathUtils.UrlPathEncode(fp.Sufix.Replace("\\", "/")) :
-                null;
         public string FullWebPath
         {
             get
             {
-                return FullWebPathExpression.Evaluate(this);
+                if (prefixPair == null)
+                    throw new InvalidOperationException("prefixPair not set");
+
+                return string.IsNullOrEmpty(prefixPair.WebPrefix) ? null : prefixPair.WebPrefix + "/" + HttpFilePathUtils.UrlPathEncode(Sufix.Replace("\\", "/"));
             }
         }
 
         public override string ToString()
         {
             return "{0} - {1}".FormatWith(FileName, ((long)FileLength).ToComputerSize(true));
+        }
+    }
+   
+    [Serializable]
+    public class PrefixPair 
+    {
+        public PrefixPair(string physicalPrefix)
+        {
+            this.PhysicalPrefix = physicalPrefix;
+        }
+
+        public string PhysicalPrefix;
+        public string WebPrefix;
+    }
+
+    [Serializable]
+    public class FileTypeSymbol : Symbol
+    {
+        private FileTypeSymbol() { }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public FileTypeSymbol([CallerMemberName]string memberName = null) :
+            base(new StackFrame(1, false), memberName)
+        {
         }
     }
 

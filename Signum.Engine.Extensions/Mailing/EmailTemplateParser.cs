@@ -162,7 +162,7 @@ namespace Signum.Engine.Mailing
                             {
                                 var t = TryParseValueProvider(type, tok.Groups["token"].Value, dec);
 
-                                stack.Peek().Nodes.Add(new ValueNode(t, tok.Groups["format"].Value, isRaw: keyword.Contains("raw")));
+                                stack.Peek().Nodes.Add(new ValueNode(t, tok.Groups["format"].Value.DefaultText(null), isRaw: keyword.Contains("raw")));
 
                                 DeclareVariable(t);
                             }
@@ -204,7 +204,8 @@ namespace Signum.Engine.Mailing
                         case "notany":
                             {
                                 var an = (AnyNode)PopBlock(typeof(AnyNode)).owner;
-                                PushBlock(an.CreateNotAny());
+                                if (an != null)
+                                    PushBlock(an.CreateNotAny());
                                 break;
                             }
                         case "endany":
@@ -252,7 +253,8 @@ namespace Signum.Engine.Mailing
                         case "else":
                             {
                                 var ifn = (IfNode)PopBlock(typeof(IfNode)).owner;
-                                PushBlock(ifn.CreateElse());
+                                if (ifn != null)
+                                    PushBlock(ifn.CreateElse());
                                 break;
                             }
                         case "endif":
@@ -261,7 +263,7 @@ namespace Signum.Engine.Mailing
                                 break;
                             }
                         default :
-                            AddError(false, "'{0}' is deprecated".FormatWith(keyword));
+                            AddError(true, "'{0}' is deprecated".FormatWith(keyword));
                             break;
                     }
                     index = match.Index + match.Length;
@@ -309,12 +311,13 @@ namespace Signum.Engine.Mailing
                 if (et.From != null && et.From.Token != null)
                 {
                     QueryTokenEntity token = et.From.Token;
-                    switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, " From", allowRemoveToken: false))
+                    switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, " From", allowRemoveToken: false, allowReCreate: et.SystemEmail != null))
                     {
                         case FixTokenResult.Nothing: break;
                         case FixTokenResult.DeleteEntity: return table.DeleteSqlSync(et);
                         case FixTokenResult.SkipEntity: return null;
                         case FixTokenResult.Fix: et.From.Token = token; break;
+                        case FixTokenResult.ReGenerateEntity: return Regenerate(et, replacements, table);
                         default: break;
                     }
                 }
@@ -325,13 +328,14 @@ namespace Signum.Engine.Mailing
                     foreach (var item in et.Recipients.Where(a => a.Token != null).ToList())
                     {
                         QueryTokenEntity token = item.Token;
-                        switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, " Recipient"))
+                        switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, " Recipient", allowRemoveToken: false, allowReCreate: et.SystemEmail != null))
                         {
                             case FixTokenResult.Nothing: break;
                             case FixTokenResult.DeleteEntity: return table.DeleteSqlSync(et);
                             case FixTokenResult.RemoveToken: et.Recipients.Remove(item); break;
                             case FixTokenResult.SkipEntity: return null;
                             case FixTokenResult.Fix: item.Token = token; break;
+                            case FixTokenResult.ReGenerateEntity: return Regenerate(et, replacements, table);
                             default: break;
                         }
                     }
@@ -356,7 +360,7 @@ namespace Signum.Engine.Mailing
                     }
 
                     using (replacements.WithReplacedDatabaseName())
-                        return table.UpdateSqlSync(et, includeCollections: true);
+                        return table.UpdateSqlSync(et, includeCollections: true, comment: "EmailTemplate: " + et.Name);
                 }
                 catch (TemplateSyncException ex)
                 {
@@ -365,6 +369,9 @@ namespace Signum.Engine.Mailing
 
                     if (ex.Result == FixTokenResult.DeleteEntity)
                         return table.DeleteSqlSync(et);
+
+                    if (ex.Result == FixTokenResult.ReGenerateEntity)
+                        return Regenerate(et, replacements, table);
 
                     throw new InvalidOperationException("Unexcpected {0}".FormatWith(ex.Result));
                 }
@@ -378,17 +385,18 @@ namespace Signum.Engine.Mailing
                 return new SqlPreCommandSimple("-- Exception in {0}: {1}".FormatWith(et.BaseToString(), e.Message));
             }
         }
-    
-        //static bool AreSimilar(string p1, string p2)
-        //{
-        //    if (p1.StartsWith("Entity."))
-        //        p1 = p1.After("Entity.");
 
-        //    if (p2.StartsWith("Entity."))
-        //        p2 = p2.After("Entity.");
+        internal static SqlPreCommand Regenerate(EmailTemplateEntity et, Replacements replacements, Table table)
+        {
+            var newTemplate = SystemEmailLogic.CreateDefaultTemplate(et.SystemEmail);
 
-        //    return p1 == p2;
-        //}
+            newTemplate.SetId(et.IdOrNull);
+            newTemplate.SetNew(false);
+            newTemplate.Ticks = et.Ticks; 
+
+            using (replacements == null ? null : replacements.WithReplacedDatabaseName())
+                return table.UpdateSqlSync(newTemplate, includeCollections: true, comment: "EmailTemplate Regenerated: " + et.Name);
+        }
     }
 
     public class EmailTemplateParameters : TemplateParameters

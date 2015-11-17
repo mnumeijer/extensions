@@ -178,7 +178,7 @@ namespace Signum.Engine.Processes
         public static void RegisterUserTypeCondition(SchemaBuilder sb, TypeConditionSymbol typeCondition)
         {
             TypeConditionLogic.RegisterCompile<ProcessEntity>(typeCondition,
-                pe => pe.Mixin<UserProcessSessionMixin>().User.RefersTo(UserEntity.Current));
+                pe => pe.User.RefersTo(UserEntity.Current));
 
             TypeConditionLogic.Register<PackageOperationEntity>(typeCondition,
                 po => Database.Query<ProcessEntity>().WhereCondition(typeCondition).Any(pe => pe.Data == po));
@@ -253,6 +253,24 @@ namespace Signum.Engine.Processes
                 line.FinishTime = TimeZoneManager.Now;
                 line.Save();
             });
+        }
+    }
+
+    public class PackageSave<T> : IProcessAlgorithm where T : class, IEntity
+    {
+        public virtual void Execute(ExecutingProcess executingProcess)
+        {
+            PackageEntity package = (PackageEntity)executingProcess.Data;
+
+            var args = package.OperationArgs;
+
+            using (OperationLogic.AllowSave<T>())
+                executingProcess.ForEachLine(package.Lines().Where(a => a.FinishTime == null), line =>
+                {
+                    ((T)(object)line.Target).Save();
+                    line.FinishTime = TimeZoneManager.Now;
+                    line.Save();
+                });
         }
     }
    
