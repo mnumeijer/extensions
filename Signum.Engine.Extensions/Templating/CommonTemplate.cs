@@ -31,7 +31,7 @@ namespace Signum.Engine.Templating
                 () => "Multiple values for column {0}".FormatWith(column.Column.Token.FullKey()));
         }
 
-        class SemiStructuralEqualityComparer : IEqualityComparer<object>
+        internal class SemiStructuralEqualityComparer : IEqualityComparer<object>
         {
             public static readonly SemiStructuralEqualityComparer Comparer = new SemiStructuralEqualityComparer();
 
@@ -174,7 +174,7 @@ namespace Signum.Engine.Templating
                     if (!(provToken is TokenValueProvider))
                         SafeConsole.WriteLineColor(ConsoleColor.Magenta, "Variable '{0}' is not a Query Token");
 
-                    var part = provToken.Try(a => a.ParsedToken); 
+                    var part = provToken?.ParsedToken; 
 
                     if (part != null && part.QueryToken == null)
                         SafeConsole.WriteLineColor(ConsoleColor.Magenta, "Variable '{0}' is not fixed yet! currently: '{1}'".FormatWith(v, part.String));

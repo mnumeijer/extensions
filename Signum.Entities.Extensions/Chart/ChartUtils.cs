@@ -177,7 +177,7 @@ namespace Signum.Entities.Chart
         {
             var result = new UserChartEntity
             {
-                Owner = UserQueryUtils.DefaultRelated(),
+                Owner = UserQueryUtils.DefaultOwner(),
 
                 QueryName = request.QueryName,
 
@@ -231,7 +231,7 @@ namespace Signum.Entities.Chart
 
             result.Parameters.ForEach(r =>
             {
-                r.Value = uq.Parameters.FirstOrDefault(u => u.Name == r.Name).Try(a => a.Value) ?? r.ScriptParameter.DefaultValue(r.ScriptParameter.GetToken(uq));
+                r.Value = uq.Parameters.FirstOrDefault(u => u.Name == r.Name)?.Value ?? r.ScriptParameter.DefaultValue(r.ScriptParameter.GetToken(uq));
             });
             return result;
         }
@@ -299,8 +299,8 @@ namespace Signum.Entities.Chart
                     Lite<Entity> l = (Lite<Entity>)r[columnIndex];
                     return new
                     {
-                        key = l.Try(li => li.Key()),
-                        toStr = l.Try(li => li.ToString()),
+                        key = l?.Key(),
+                        toStr = l?.ToString(),
                         color = l == null ? "#555" : GetChartColor(l.EntityType, l.Id).TryToHtml(),
                     };
                 };
@@ -315,7 +315,7 @@ namespace Signum.Entities.Chart
                     return new
                     {
                         key = e == null ? (int?)null : Convert.ToInt32(e),
-                        toStr = e.Try(en => en.NiceToString()),
+                        toStr = e?.NiceToString(),
                         color = e == null ? "#555" : GetChartColor(enumEntity, Convert.ToInt32(e)).TryToHtml(),
                     };
                 };
@@ -330,8 +330,8 @@ namespace Signum.Entities.Chart
                     return new
                     {
                         key = e,
-                        keyForFilter = e.TryToString("s"),
-                        toStr = ct.Token.Token.Format.HasText() ? e.TryToString(ct.Token.Token.Format) : r[columnIndex].TryToString()
+                        keyForFilter = e?.ToString("s"),
+                        toStr = ct.Token.Token.Format.HasText() ? e?.ToString(ct.Token.Token.Format) : r[columnIndex]?.ToString()
                     };
                 };
             }
@@ -397,7 +397,7 @@ namespace Signum.Entities.Chart
             foreach (var p in chartRequest.Parameters.Where(p => p.ScriptParameter.ColumnIndex == index))
 	        {
                 if (p.PropertyCheck(() => p.Value).HasText())
-                    p.Value = p.ScriptParameter.DefaultValue(chartColumn.Token.Try(t => t.Token));
+                    p.Value = p.ScriptParameter.DefaultValue(chartColumn.Token?.Token);
 	        }
         }
     }

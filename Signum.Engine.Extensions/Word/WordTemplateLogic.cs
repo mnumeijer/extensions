@@ -24,6 +24,7 @@ using Signum.Utilities.DataStructures;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Wordprocessing;
 using System.Text.RegularExpressions;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Word
 {
@@ -40,6 +41,7 @@ namespace Signum.Engine.Word
 
         static Expression<Func<SystemWordTemplateEntity, IQueryable<WordTemplateEntity>>> WordTemplatesExpression =
             e => Database.Query<WordTemplateEntity>().Where(a => a.SystemWordTemplate == e);
+        [ExpressionField]
         public static IQueryable<WordTemplateEntity> WordTemplates(this SystemWordTemplateEntity e)
         {
             return WordTemplatesExpression.Evaluate(e);
@@ -95,7 +97,7 @@ namespace Signum.Engine.Word
                     CanExecute = et =>
                     {
                         if (et.SystemWordTemplate != null && SystemWordTemplateLogic.RequiresExtraParameters(et.SystemWordTemplate))
-                            return "SystemWordTemplate ({1}) requires extra parameters".FormatWith(et.SystemWordTemplate);
+                            return WordTemplateMessage._01RequiresExtraParameters.NiceToString(typeof(SystemWordTemplateEntity).NiceName(), et.SystemWordTemplate);
 
                         return null;
                     },
@@ -129,6 +131,9 @@ namespace Signum.Engine.Word
 
         public static void RegisterTransformer(WordTransformerSymbol transformerSymbol, Action<WordContext, WordprocessingDocument> transformer)
         {
+            if (transformerSymbol == null)
+                throw AutoInitAttribute.ArgumentNullException(typeof(WordTransformerSymbol), nameof(transformerSymbol));
+
             Transformers.Add(transformerSymbol, transformer);
         }
 
@@ -141,6 +146,9 @@ namespace Signum.Engine.Word
 
         public static void RegisterConverter(WordConverterSymbol converterSymbol, Func<WordContext, byte[], byte[]> converter)
         {
+            if (converterSymbol == null)
+                throw new ArgumentNullException(nameof(converterSymbol));
+
             Converters.Add(converterSymbol, converter);
         }
 
@@ -389,9 +397,14 @@ namespace Signum.Engine.Word
             }
         }
 
-        public static void Regenerate(WordTemplateEntity template)
+        public static bool Regenerate(WordTemplateEntity template)
         {
-            Regenerate(template, null).ExecuteLeaves();
+            var result = Regenerate(template, null);
+            if (result == null)
+                return false;
+            
+            result.ExecuteLeaves();
+            return true;
         }
 
         private static SqlPreCommand Regenerate(WordTemplateEntity template, Replacements replacements)

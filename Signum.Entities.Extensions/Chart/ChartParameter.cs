@@ -29,13 +29,8 @@ namespace Signum.Entities.Chart
         }
 
         [NotNullable, SqlDbType(Size = 100)]
-        string name;
         [StringLengthValidator(AllowNulls = false, Min = 3, Max = 100)]
-        public string Name
-        {
-            get { return name; }
-            set { Set(ref name, value); }
-        }
+        public string Name { get; set; }
 
         [SqlDbType(Size = 50)]
         string value;
@@ -52,13 +47,11 @@ namespace Signum.Entities.Chart
 
         protected override string PropertyValidation(PropertyInfo pi)
         {
-            if (pi.Is(() => Name) && Name != scriptParameter.Name)
+            if (pi.Name == nameof(Name) && Name != scriptParameter.Name)
                 return ValidationMessage._0ShouldBe12.NiceToString(pi.NiceName(), ComparisonType.EqualTo.NiceToString(), scriptParameter.Name);
 
-            if (pi.Is(() => Value))
-            {
+            if (pi.Name == nameof(Value))
                 return ScriptParameter.Valdidate(this.Value, this.ScriptParameter.GetToken(this.ParentChart));
-            }
 
             return base.PropertyValidation(pi);
         }

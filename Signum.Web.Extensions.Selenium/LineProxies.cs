@@ -397,7 +397,12 @@ namespace Signum.Web.Selenium
 
         public Lite<IEntity> LiteValue
         {
-            get { return RuntimeInfo().ToLite(); }
+            get
+            {
+                var text = Selenium.FindElement(ComboLocator).SelectElement().AllSelectedOptions.SingleOrDefaultEx()?.Text;
+
+                return RuntimeInfo().ToLite(text);
+            }
             set
             {
                 Selenium.FindElement(ComboLocator).SelectElement().SelectByValue(value == null ? "" : value.Key());
@@ -408,7 +413,7 @@ namespace Signum.Web.Selenium
         {
            return Selenium.FindElement(ComboLocator)
                 .SelectElement().Options
-                .Select(o => Lite.Parse(o.GetAttribute("value")).TryDo(l => l.SetToString(o.Text)))
+                .Select(o => Lite.Parse(o.GetAttribute("value"))?.Do(l => l.SetToString(o.Text)))
                 .ToList();
         }
 
@@ -833,7 +838,7 @@ namespace Signum.Web.Selenium
 
         public By CheckBoxLocator(Lite<Entity> lite)
         {
-            return By.CssSelector("#" + this.Prefix + " input[value='" + RuntimeInfoProxy.FromLite(lite) + "']");
+            return By.CssSelector("#" + this.Prefix + " input[value^='" + RuntimeInfoProxy.FromLite(lite) + "']");
         }
 
         public List<Lite<Entity>> GetDataElements()

@@ -23,6 +23,7 @@ using System.Text.RegularExpressions;
 using Signum.Entities.Basics;
 using Signum.Engine.Templating;
 using System.Net.Mail;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Mailing
 {
@@ -37,12 +38,16 @@ namespace Signum.Engine.Mailing
      
         static Expression<Func<SystemEmailEntity, IQueryable<EmailTemplateEntity>>> EmailTemplatesExpression =
             se => Database.Query<EmailTemplateEntity>().Where(et => et.SystemEmail == se);
+        [ExpressionField]
         public static IQueryable<EmailTemplateEntity> EmailTemplates(this SystemEmailEntity se)
         {
             return EmailTemplatesExpression.Evaluate(se);
         }
         
         public static ResetLazy<Dictionary<Lite<EmailTemplateEntity>, EmailTemplateEntity>> EmailTemplatesLazy;
+        
+        public static Polymorphic<Func<IAttachmentGeneratorEntity, EmailTemplateEntity, IEntity, List<EmailAttachmentEntity>>> GenerateAttachment = 
+            new Polymorphic<Func<IAttachmentGeneratorEntity, EmailTemplateEntity, IEntity, List<EmailAttachmentEntity>>>();
 
         public static Func<EmailTemplateEntity, SmtpConfigurationEntity> GetSmtpConfiguration;
 
@@ -327,9 +332,15 @@ namespace Signum.Engine.Mailing
                 throw new Exception(exceptions.ToString("\r\n\r\n"));
         }
 
-        public static void Regenerate(EmailTemplateEntity et)
+        public static bool Regenerate(EmailTemplateEntity et)
         {
-            EmailTemplateParser.Regenerate(et, null, Schema.Current.Table<EmailTemplateEntity>()).ExecuteLeaves();
+            var leaves = EmailTemplateParser.Regenerate(et, null, Schema.Current.Table<EmailTemplateEntity>());
+            
+            if (leaves == null)
+                return false;
+            
+            leaves.ExecuteLeaves();
+            return true;
         }
     }
 }

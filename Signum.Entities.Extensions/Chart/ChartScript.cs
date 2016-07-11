@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using Signum.Entities.Reflection;
 using Signum.Utilities.Reflection;
 using System.Reflection;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Entities.Chart
 {
@@ -19,64 +20,30 @@ namespace Signum.Entities.Chart
     public class ChartScriptEntity : Entity
     {
         [NotNullable, SqlDbType(Size = 100), UniqueIndex]
-        string name;
         [StringLengthValidator(AllowNulls = false, Min = 3, Max = 100)]
-        public string Name
-        {
-            get { return name; }
-            set { SetToStr(ref name, value); }
-        }
+        public string Name { get; set; }
 
-        Lite<FileEntity> icon;
-        public Lite<FileEntity> Icon
-        {
-            get { return icon; }
-            set { Set(ref icon, value); }
-        }
+        public Lite<FileEntity> Icon { get; set; }
 
         [NotNullable, SqlDbType(Size = int.MaxValue)]
-        string script;
         [StringLengthValidator(AllowNulls = false, Min = 3, MultiLine = true)]
-        public string Script
-        {
-            get { return script; }
-            set { Set(ref script, value); }
-        }
+        public string Script { get; set; }
 
-        GroupByChart groupBy;
-        public GroupByChart GroupBy
-        {
-            get { return groupBy; }
-            set { Set(ref groupBy, value); }
-        }
+        public GroupByChart GroupBy { get; set; }
 
         [NotifyCollectionChanged, ValidateChildProperty, NotNullable, PreserveOrder]
-        MList<ChartScriptColumnEntity> columns = new MList<ChartScriptColumnEntity>();
-        public MList<ChartScriptColumnEntity> Columns
-        {
-            get { return columns; }
-            set { Set(ref columns, value); }
-        }
+        public MList<ChartScriptColumnEntity> Columns { get; set; } = new MList<ChartScriptColumnEntity>();
 
         [NotifyCollectionChanged, ValidateChildProperty, NotNullable, PreserveOrder]
-        MList<ChartScriptParameterEntity> parameters = new MList<ChartScriptParameterEntity>();
         [NotNullValidator, NoRepeatValidator]
-        public MList<ChartScriptParameterEntity> Parameters
-        {
-            get { return parameters; }
-            set { Set(ref parameters, value); }
-        }
+        public MList<ChartScriptParameterEntity> Parameters { get; set; } = new MList<ChartScriptParameterEntity>();
 
         [NotNullable, SqlDbType(Size = 100)]
-        string columnsStructure;
         [StringLengthValidator(AllowNulls = false, Min = 3, Max = 100)]
-        public string ColumnsStructure
-        {
-            get { return columnsStructure; }
-            set { Set(ref columnsStructure, value); }
-        }
+        public string ColumnsStructure { get; set; }
 
-        static Expression<Func<ChartScriptEntity, string>> ToStringExpression = e => e.name;
+        static Expression<Func<ChartScriptEntity, string>> ToStringExpression = e => e.Name;
+        [ExpressionField]
         public override string ToString()
         {
             return ToStringExpression.Evaluate(this);
@@ -90,7 +57,7 @@ namespace Signum.Entities.Chart
         protected override string ChildPropertyValidation(ModifiableEntity sender, System.Reflection.PropertyInfo pi)
         {
             var column = sender as ChartScriptColumnEntity;
-            if (column != null && pi.Is(() => column.IsGroupKey))
+            if (column != null && pi.Name == nameof(column.IsGroupKey))
             {
                 if (column.IsGroupKey)
                 {
@@ -100,13 +67,13 @@ namespace Signum.Entities.Chart
             }
 
             var param = sender as ChartScriptParameterEntity;
-            if (param != null && pi.Is(() => param.ColumnIndex))
+            if (param != null && pi.Name == nameof(param.ColumnIndex))
             {
                 if (param.ColumnIndex == null && param.ShouldHaveColumnIndex())
                     return ValidationMessage._0IsNecessary.NiceToString(pi.NiceName());
 
                 if (param.ColumnIndex.HasValue && !(0 <= param.ColumnIndex && param.ColumnIndex < this.Columns.Count))
-                    return ValidationMessage._0HasToBeBetween1And2.NiceToString(pi.NiceName(), 0, this.columns.Count);
+                    return ValidationMessage._0HasToBeBetween1And2.NiceToString(pi.NiceName(), 0, this.Columns.Count);
             }
 
             return base.ChildPropertyValidation(sender, pi);
@@ -114,21 +81,21 @@ namespace Signum.Entities.Chart
 
         protected override string PropertyValidation(System.Reflection.PropertyInfo pi)
         {
-            if (pi.Is(() => GroupBy))
+            if (pi.Name == nameof(GroupBy))
             {
                 if (GroupBy == GroupByChart.Always || GroupBy == GroupByChart.Optional)
                 {
                     if (!Columns.Any(a => a.IsGroupKey))
-                        return "{0} {1} requires some key columns".FormatWith(pi.NiceName(), groupBy.NiceToString());
+                        return "{0} {1} requires some key columns".FormatWith(pi.NiceName(), GroupBy.NiceToString());
                 }
                 else
                 {
                     if (Columns.Any(a => a.IsGroupKey))
-                        return "{0} {1} should not have key".FormatWith(pi.NiceName(), groupBy.NiceToString());
+                        return "{0} {1} should not have key".FormatWith(pi.NiceName(), GroupBy.NiceToString());
                 }
             }
 
-            if (pi.Is(() => Script))
+            if (pi.Name == nameof(Script))
             {
                 if (!Regex.IsMatch(Script, @"function\s+DrawChart\s*\(\s*chart\s*,\s*data\s*\)", RegexOptions.Singleline))
                 {
@@ -156,7 +123,7 @@ namespace Signum.Entities.Chart
 
         public XDocument ExportXml()
         {
-            var icon = Icon == null? null: Icon.Entity;
+            var icon = Icon == null ? null : Icon.Entity;
 
             return new XDocument(new XDeclaration("1.0", "utf-8", "yes"),
                 new XElement("ChartScript",
@@ -168,8 +135,8 @@ namespace Signum.Entities.Chart
                             c.IsGroupKey ? new XAttribute("IsGroupKey", true) : null,
                             c.IsOptional ? new XAttribute("IsOptional", true) : null
                          ))),
-                    new XElement("Parameters", 
-                        Parameters.Select(p=>new XElement("Parameter",
+                    new XElement("Parameters",
+                        Parameters.Select(p => new XElement("Parameter",
                             new XAttribute("Name", p.Name),
                             new XAttribute("Type", p.Type),
                             new XAttribute("ValueDefinition", p.ValueDefinition),
@@ -180,7 +147,7 @@ namespace Signum.Entities.Chart
                         new XAttribute("FileName", icon.FileName),
                         new XCData(Convert.ToBase64String(Icon.Entity.BinaryFile))),
                     new XElement("Script", new XCData(Script))));
-                    
+
         }
 
         public void ImportXml(XDocument doc, string name, bool force = false)
@@ -211,7 +178,7 @@ namespace Signum.Entities.Chart
                     o.DisplayName = n.DisplayName;
                     o.IsGroupKey = n.IsGroupKey;
                     o.IsOptional = n.IsOptional;
-                }); 
+                });
             }
             else
             {
@@ -223,7 +190,7 @@ namespace Signum.Entities.Chart
                 Name = p.Attribute("Name").Value,
                 Type = p.Attribute("Type").Value.ToEnum<ChartParameterType>(),
                 ValueDefinition = p.Attribute("ValueDefinition").Value,
-                ColumnIndex = p.Attribute("ColumnIndex").Try(c => int.Parse(c.Value)),
+                ColumnIndex = p.Attribute("ColumnIndex")?.Let(c => int.Parse(c.Value)),
             }).ToList();
 
             if (this.Parameters.Count == parameters.Count)
@@ -243,7 +210,7 @@ namespace Signum.Entities.Chart
 
             this.Script = script.Elements("Script").Nodes().OfType<XCData>().Single().Value;
 
-            var newFile = script.Element("Icon").Try(icon => new FileEntity
+            var newFile = script.Element("Icon")?.Let(icon => new FileEntity
             {
                 FileName = icon.Attribute("FileName").Value,
                 BinaryFile = Convert.FromBase64String(icon.Nodes().OfType<XCData>().Single().Value),
@@ -255,7 +222,7 @@ namespace Signum.Entities.Chart
             }
             else
             {
-                if (icon == null || icon.Entity.FileName != newFile.FileName || !AreEqual(icon.Entity.BinaryFile, newFile.BinaryFile))
+                if (Icon == null || Icon.Entity.FileName != newFile.FileName || !AreEqual(Icon.Entity.BinaryFile, newFile.BinaryFile))
                     Icon = newFile.ToLiteFat();
             }
         }
@@ -324,7 +291,7 @@ namespace Signum.Entities.Chart
                 if (c.Token.Token is AggregateToken)
                     return !s.IsGroupKey;
                 else
-                    return s.IsGroupKey || !chartBase.GroupResults; 
+                    return s.IsGroupKey || !chartBase.GroupResults;
 
             }).All(a => a);
         }
@@ -336,11 +303,12 @@ namespace Signum.Entities.Chart
         }
     }
 
+    [AutoInit]
     public static class ChartScriptOperation
     {
-        public static readonly ExecuteSymbol<ChartScriptEntity> Save = OperationSymbol.Execute<ChartScriptEntity>();
-        public static readonly ConstructSymbol<ChartScriptEntity>.From<ChartScriptEntity> Clone = OperationSymbol.Construct<ChartScriptEntity>.From<ChartScriptEntity>();
-        public static readonly DeleteSymbol<ChartScriptEntity> Delete = OperationSymbol.Delete<ChartScriptEntity>();
+        public static ExecuteSymbol<ChartScriptEntity> Save;
+        public static ConstructSymbol<ChartScriptEntity>.From<ChartScriptEntity> Clone;
+        public static DeleteSymbol<ChartScriptEntity> Delete;
     }
 
     public enum GroupByChart

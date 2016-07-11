@@ -14,6 +14,7 @@ using System.Linq.Expressions;
 using Signum.Utilities;
 using Signum.Engine.Scheduler;
 using Signum.Engine.Authorization;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Mailing
 {
@@ -21,6 +22,7 @@ namespace Signum.Engine.Mailing
     {
         static Expression<Func<EmailPackageEntity, IQueryable<EmailMessageEntity>>> MessagesExpression =
             p => Database.Query<EmailMessageEntity>().Where(a => a.Package.RefersTo(p));
+        [ExpressionField]
         public static IQueryable<EmailMessageEntity> Messages(this EmailPackageEntity p)
         {
             return MessagesExpression.Evaluate(p);
@@ -28,6 +30,7 @@ namespace Signum.Engine.Mailing
 
         static Expression<Func<EmailPackageEntity, IQueryable<EmailMessageEntity>>> RemainingMessagesExpression =
             p => p.Messages().Where(a => a.State == EmailMessageState.RecruitedForSending);
+        [ExpressionField]
         public static IQueryable<EmailMessageEntity> RemainingMessages(this EmailPackageEntity p)
         {
             return RemainingMessagesExpression.Evaluate(p);
@@ -35,6 +38,7 @@ namespace Signum.Engine.Mailing
 
         static Expression<Func<EmailPackageEntity, IQueryable<EmailMessageEntity>>> ExceptionMessagesExpression =
             p => p.Messages().Where(a => a.State == EmailMessageState.SentException);
+        [ExpressionField]
         public static IQueryable<EmailMessageEntity> ExceptionMessages(this EmailPackageEntity p)
         {
             return ExceptionMessagesExpression.Evaluate(p);
@@ -52,6 +56,7 @@ namespace Signum.Engine.Mailing
                 dqm.RegisterExpression((EmailPackageEntity ep) => ep.ExceptionMessages(), () => EmailMessageMessage.ExceptionMessages.NiceToString());
 
                 ProcessLogic.AssertStarted(sb);
+                ProcessLogic.Register(EmailMessageProcess.CreateEmailsSendAsync, new CreateEmailsSendAsyncProcessAlgorithm());
                 ProcessLogic.Register(EmailMessageProcess.SendEmails, new SendEmailProcessAlgorithm());
 
                 new Graph<ProcessEntity>.ConstructFromMany<EmailMessageEntity>(EmailMessageOperation.ReSendEmails)
@@ -95,6 +100,33 @@ namespace Signum.Engine.Mailing
             }
         }
 
+        public static ProcessEntity SendMultipleEmailsAsync(Lite<EmailTemplateEntity> template, List<Lite<Entity>> targets)
+        {
+            return ProcessLogic.Create(EmailMessageProcess.CreateEmailsSendAsync, new PackageEntity { OperationArgs = new[] { template } }.CreateLines(targets));
+        }
+    }
+
+
+    public class CreateEmailsSendAsyncProcessAlgorithm : IProcessAlgorithm
+    {
+        public virtual void Execute(ExecutingProcess executingProcess)
+        {
+            PackageEntity package = (PackageEntity)executingProcess.Data;
+
+            var args = package.OperationArgs;
+            var template = args.GetArg<Lite<EmailTemplateEntity>>();
+
+            executingProcess.ForEachLine(package.Lines().Where(a => a.FinishTime == null), line =>
+            {
+                var emails = template.CreateEmailMessage(line.Target).ToList();
+                foreach (var email in emails)
+                    email.SendMailAsync();
+
+                line.Result = emails.Only()?.ToLite();
+                line.FinishTime = TimeZoneManager.Now;
+                line.Save();
+            });
+        }
     }
 
     public class SendEmailProcessAlgorithm : IProcessAlgorithm

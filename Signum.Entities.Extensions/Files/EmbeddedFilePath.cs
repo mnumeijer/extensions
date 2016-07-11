@@ -18,7 +18,7 @@ namespace Signum.Entities.Files
 
         public EmbeddedFilePathEntity(FileTypeSymbol fileType)
         {
-            this.fileType = fileType;
+            this.FileType = fileType;
         }
 
         public EmbeddedFilePathEntity(FileTypeSymbol fileType, string path)
@@ -47,7 +47,7 @@ namespace Signum.Entities.Files
                 if (ForceExtensionIfEmpty.HasText() && !Path.GetExtension(value).HasText())
                     value += ForceExtensionIfEmpty;
 
-                SetToStr(ref fileName, value);
+                Set(ref fileName, value);
             }
         }
 
@@ -63,12 +63,7 @@ namespace Signum.Entities.Files
             }
         }
 
-        int fileLength;
-        public int FileLength
-        {
-            get { return fileLength; }
-            internal set { SetToStr(ref fileLength, value); }
-        }
+        public int FileLength { get; internal set; }
 
         public string FileLengthString
         {
@@ -76,29 +71,14 @@ namespace Signum.Entities.Files
         }
 
         [NotNullable, SqlDbType(Size = 260)]
-        string sufix;
         [StringLengthValidator(AllowNulls = true, Min = 3, Max = 260)]
-        public string Sufix
-        {
-            get { return sufix; }
-            set { Set(ref sufix, value); }
-        }
+        public string Sufix { get; set; }
 
         [Ignore]
-        string calculatedDirectory;
-        public string CalculatedDirectory
-        {
-            get { return calculatedDirectory; }
-            set { Set(ref calculatedDirectory, value); }
-        }
+        public string CalculatedDirectory { get; set; }
 
         [NotNullable]
-        FileTypeSymbol fileType;
-        public FileTypeSymbol FileType
-        {
-            get { return fileType; }
-            internal set { Set(ref fileType, value); }
-        }
+        public FileTypeSymbol FileType { get; internal set; }
 
         [Ignore]
         internal PrefixPair prefixPair;
@@ -139,7 +119,7 @@ namespace Signum.Entities.Files
         {
             if (OnPreSaving == null)
                 throw new InvalidOperationException("OnPreSaving not set");
-         
+
             OnPreSaving(this);
         }
 
@@ -152,8 +132,5 @@ namespace Signum.Entities.Files
 
             OnPostRetrieved(this);
         }
-
-
-      
     }
 }

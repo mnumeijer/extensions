@@ -220,7 +220,7 @@ WriteTo(__razor_template_writer, Html.EntityLine(e, f => f.Exception));
 WriteLiteralTo(__razor_template_writer, "\r\n                        </div>\r\n                    </div>\r\n                </f" +
 "ieldset>\r\n\r\n\r\n                <div");
 
-WriteLiteralTo(__razor_template_writer, " class=\" form-inline repeater-inline\"");
+WriteLiteralTo(__razor_template_writer, " class=\"form-inline repeater-inline\"");
 
 WriteLiteralTo(__razor_template_writer, ">\r\n");
 
@@ -383,14 +383,14 @@ WriteLiteralTo(__razor_template_writer, "                    <div>\r\n");
             #line hidden
 WriteLiteralTo(__razor_template_writer, "                            <iframe");
 
-WriteAttributeTo(__razor_template_writer, "id", Tuple.Create(" id=\"", 3081), Tuple.Create("\"", 3106)
+WriteAttributeTo(__razor_template_writer, "id", Tuple.Create(" id=\"", 3080), Tuple.Create("\"", 3105)
             
             #line 81 "..\..\Mailing\Views\EmailMessage.cshtml"
-, Tuple.Create(Tuple.Create("", 3086), Tuple.Create<System.Object, System.Int32>(e.Compose("iframe")
+, Tuple.Create(Tuple.Create("", 3085), Tuple.Create<System.Object, System.Int32>(e.Compose("iframe")
             
             #line default
             #line hidden
-, 3086), false)
+, 3085), false)
 );
 
 WriteLiteralTo(__razor_template_writer, " style=\"width:100%\"");
@@ -409,11 +409,11 @@ WriteTo(__razor_template_writer, Html.Raw(body));
 WriteLiteralTo(__razor_template_writer, "\r\n                            </iframe>\r\n");
 
 WriteLiteralTo(__razor_template_writer, "                            <script>\r\n                                $(function " +
-"() {\r\n                                    var iframe = $(\"");
+"() {\r\n                                    var iframe = $(\".sf-email-message #");
 
             
             #line 86 "..\..\Mailing\Views\EmailMessage.cshtml"
-                    WriteTo(__razor_template_writer, e.Compose("iframe"));
+                                       WriteTo(__razor_template_writer, e.Compose("iframe"));
 
             
             #line default

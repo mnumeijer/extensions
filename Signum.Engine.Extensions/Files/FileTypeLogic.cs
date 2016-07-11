@@ -20,6 +20,12 @@ namespace Signum.Engine.Files
 
         public static void Register(FileTypeSymbol fileTypeSymbol, FileTypeAlgorithm algorithm)
         {
+            if (fileTypeSymbol == null)
+                throw AutoInitAttribute.ArgumentNullException(typeof(FileTypeSymbol), nameof(fileTypeSymbol));
+
+            if (algorithm == null)
+                throw new ArgumentNullException(nameof(algorithm));
+
             FileTypes.Add(fileTypeSymbol, algorithm);
         }
 

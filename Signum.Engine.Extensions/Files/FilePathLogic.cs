@@ -16,6 +16,7 @@ using System.Linq.Expressions;
 using Signum.Engine.Operations;
 using Signum.Utilities.Reflection;
 using Signum.Entities.Isolation;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Files
 {
@@ -23,6 +24,7 @@ namespace Signum.Engine.Files
     {
         static Expression<Func<FilePathEntity, WebImage>> WebImageExpression =
             fp => new WebImage { FullWebPath = fp.FullWebPath };
+        [ExpressionField]
         public static WebImage WebImage(this FilePathEntity fp)
         {
             return WebImageExpression.Evaluate(fp);
@@ -30,11 +32,12 @@ namespace Signum.Engine.Files
 
         static Expression<Func<FilePathEntity, WebDownload>> WebDownloadExpression =
            fp => new WebDownload { FullWebPath = fp.FullWebPath };
+        [ExpressionField]
         public static WebDownload WebDownload(this FilePathEntity fp)
         {
             return WebDownloadExpression.Evaluate(fp);
         }
-        
+
         public static void AssertStarted(SchemaBuilder sb)
         {
             sb.AssertDefined(ReflectionTools.GetMethodInfo(() => FilePathLogic.Start(null, null)));
@@ -100,7 +103,7 @@ namespace Signum.Engine.Files
             }
         }
 
-      
+
 
         static void FilePathLogic_Retrieved(FilePathEntity fp)
         {
@@ -110,7 +113,8 @@ namespace Signum.Engine.Files
 
         public static FilePathEntity SetPrefixPair(this FilePathEntity fp)
         {
-            fp.prefixPair = FileTypeLogic.FileTypes.GetOrThrow(fp.FileType).GetPrefixPair(fp);
+            using (new EntityCache(EntityCacheType.ForceNew))
+                fp.prefixPair = FileTypeLogic.FileTypes.GetOrThrow(fp.FileType).GetPrefixPair(fp);
 
             return fp;
         }
@@ -123,7 +127,7 @@ namespace Signum.Engine.Files
 
                 Transaction.PostRealCommit += ud =>
                 {
-                    foreach (var gr in list.GroupBy(f=>f.FileType))
+                    foreach (var gr in list.GroupBy(f => f.FileType))
                     {
                         var alg = FileTypeLogic.FileTypes.GetOrThrow(gr.Key);
                         if (alg.TakesOwnership)

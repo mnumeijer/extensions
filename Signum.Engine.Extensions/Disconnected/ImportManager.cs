@@ -32,7 +32,7 @@ namespace Signum.Engine.Disconnected
     {
         static object SyncLock = new object();
 
-        public class UploadTable
+        class UploadTable
         {
             public Type Type;
             public Table Table;
@@ -75,7 +75,7 @@ namespace Signum.Engine.Disconnected
             uploadTables = graph.CompilationOrder().Select(t => dic[t]).ToList();
         }
 
-        public List<UploadTable> uploadTables;
+        List<UploadTable> uploadTables;
 
 
         class RunningImports
@@ -85,11 +85,6 @@ namespace Signum.Engine.Disconnected
         }
 
         Dictionary<Lite<DisconnectedImportEntity>, RunningImports> runningImports = new Dictionary<Lite<DisconnectedImportEntity>, RunningImports>();
-
-        public bool ImportInProgress
-        {
-            get { return runningImports.Any(); }
-        }
 
         public virtual Lite<DisconnectedImportEntity> BeginImportDatabase(DisconnectedMachineEntity machine, Stream file = null)
         {
