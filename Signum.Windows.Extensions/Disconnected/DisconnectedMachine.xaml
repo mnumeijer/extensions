@@ -9,7 +9,7 @@
         <m:ValueLine m:Common.Route="CreationDate" />
         <m:ValueLine m:Common.Route="MachineName" />
         <m:ValueLine m:Common.Route="State" m:Common.IsReadOnly="True" />
-        <m:ValueLine m:Common.Route="SeedMin" />
-        <m:ValueLine m:Common.Route="SeedMax" />
+        <m:ValueLine m:Common.Route="SeedMin" m:Common.IsReadOnly="True" />
+        <m:ValueLine m:Common.Route="SeedMax" m:Common.IsReadOnly="True" />
     </StackPanel>
 </UserControl>
