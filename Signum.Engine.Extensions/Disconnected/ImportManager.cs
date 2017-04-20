@@ -241,6 +241,8 @@ namespace Signum.Engine.Disconnected
             UnlockTables(machine);
 
             machine.InDB().UnsafeUpdate().Set(m => m.State, m => DisconnectedMachineState.Connected).Execute();
+
+            OnSkipExport(machine);
         }
 
         public virtual void ConnectAfterFix(Lite<DisconnectedMachineEntity> machine)
@@ -253,6 +255,10 @@ namespace Signum.Engine.Disconnected
         }
 
         protected virtual void OnEndImporting()
+        {
+            
+        }
+        protected virtual void OnSkipExport(Lite<DisconnectedMachineEntity> machine)
         {
         }
 
