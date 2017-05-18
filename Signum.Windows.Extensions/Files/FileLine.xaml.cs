@@ -198,9 +198,18 @@ namespace Signum.Windows.Files
             if (resolveBinaryFile == null)
                 resolveBinaryFile = DefaultResolveBinaryFile;
 
-            string filePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), file.FileName);
+            string filePath = System.IO.Path.Combine(GetTempPath(), file.FileName);
             File.WriteAllBytes(filePath, file.BinaryFile ?? resolveBinaryFile(file));
             Process.Start(filePath);
+        }
+
+        public static string GetTempPath()
+        {
+            string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "CIQS2.0");
+
+            if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+
+            return tempDir;
         }
 
         private void OnSaving(object entity)
