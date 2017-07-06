@@ -22,10 +22,10 @@ namespace Signum.Entities.Disconnected
 
         public DisconnectedMachineState State { get; set; }
 
-        [NumberIsValidator(ComparisonType.GreaterThan, 0)]
+        [NumberIsValidator(ComparisonType.GreaterThanOrEqualTo, 0)]
         public int SeedMin { get; set; }
 
-        [NumberIsValidator(ComparisonType.GreaterThan, 0)]
+        [NumberIsValidator(ComparisonType.GreaterThanOrEqualTo, 0)]
         public int SeedMax { get; set; }
 
         static Expression<Func<DisconnectedMachineEntity, Interval<int>>> SeedIntervalExpression =
@@ -53,7 +53,7 @@ namespace Signum.Entities.Disconnected
 
         protected override string PropertyValidation(System.Reflection.PropertyInfo pi)
         {
-            if (pi.Name == nameof(SeedMax) && SeedMax <= SeedMin)
+            if (!IsNew && pi.Name == nameof(SeedMax) && SeedMax <= SeedMin)
                 return ValidationMessage._0ShouldBeGreaterThan1.NiceToString(pi, NicePropertyName(() => SeedMin));
 
             return base.PropertyValidation(pi);
